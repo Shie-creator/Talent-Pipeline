@@ -6,6 +6,7 @@ const missing = required.filter((key) => !process.env[key]);
 
 if (missing.length) {
   console.error(`Missing required environment variables: ${missing.join(", ")}`);
+  console.error("In Cloudflare Pages, add them under Settings > Environment variables for Production, then redeploy.");
   process.exit(1);
 }
 
