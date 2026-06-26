@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nao Medical — Provider Pipeline Action Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Adamina&family=Commissioner:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>window.PIPELINE_CONFIG={supabaseUrl:"%SUPABASE_URL%",supabaseAnonKey:"%SUPABASE_ANON_KEY%"};</script>
+<style>
+  :root{
+    --navy:#1e3565; --teal:#2f9e8f; --teal-deep:#1f7e72; --teal-soft:#d7efe9;
+    --bg:#f5fbf4; --card:#ffffff; --line:#e3ece5; --ink:#1e3565; --muted:#5d6b7d;
+    --warn-bg:#fff1df; --warn-line:#f3c98a; --warn-ink:#9a5b13;
+    --zero-bg:#fde4e4; --zero-line:#f3b4b4; --zero-ink:#9c2d2d;
+    --ok-bg:#e7f6ef; --ok-ink:#1f7e72;
+    --blue:#3a5a9c; --blue-soft:#e7edfb; --blue-ink:#28407a;
+    --gold:#c98a2b; --gold-soft:#f7efe0;
+    --shadow:0 1px 2px rgba(30,53,101,.06),0 8px 24px rgba(30,53,101,.06);
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{font-family:"Commissioner",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5}
+  h1,h2,h3{font-family:"Adamina",Georgia,serif;font-weight:400;color:var(--navy);margin:0}
+  .wrap{max-width:1200px;margin:0 auto;padding:28px 22px 90px}
+
+  .masthead{display:flex;align-items:center;gap:16px;margin-bottom:6px}
+  .logo{width:42px;height:42px;flex:0 0 42px}
+  .masthead h1{font-size:26px;letter-spacing:.2px}
+  .masthead .sub{font-size:13px;color:var(--muted);margin-top:2px}
+  .tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--teal-deep);background:var(--teal-soft);padding:3px 9px;border-radius:999px;margin-left:2px}
+
+  .topbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:20px 0 4px}
+  .asof{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 11px}
+  .asof input[type=date]{font-family:inherit;font-size:13px;color:var(--ink);border:none;background:transparent;cursor:pointer}
+  .asof .wd{font-weight:600;color:var(--navy)}
+  .btn{font-family:"Commissioner",sans-serif;font-size:13.5px;font-weight:600;cursor:pointer;border:1px solid var(--teal);background:var(--teal);color:#fff;padding:9px 15px;border-radius:10px;transition:.15s;white-space:nowrap}
+  .btn:hover{background:var(--teal-deep);border-color:var(--teal-deep)}
+  .btn.ghost{background:#fff;color:var(--teal-deep)}
+  .btn.ghost:hover{background:var(--teal-soft)}
+  .btn.tiny{font-size:12px;padding:5px 10px;border-radius:8px}
+  .btn.navy{background:var(--navy);border-color:var(--navy)} .btn.navy:hover{background:#16284d}
+  .btn:disabled{opacity:.52;cursor:not-allowed;filter:grayscale(.2)} .btn:disabled:hover{background:var(--teal);border-color:var(--teal)}
+  .authbox{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+  .authbox .who{max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .readonly-note{background:#fff;border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:10px;padding:10px 13px;font-size:12.5px;color:var(--muted);margin-top:10px}
+  body.readonly .editor-only{display:none!important}
+  body.readonly #refDate{pointer-events:none;color:var(--muted)}
+  .search{flex:1;min-width:170px;max-width:280px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13.5px;color:var(--ink);background:#fff}
+  .search:focus{outline:none;border-color:var(--teal)}
+  .spacer{flex:1}
+
+  .notice{background:#fff;border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:10px;padding:13px 16px;font-size:13px;color:var(--muted);margin-top:14px;box-shadow:var(--shadow)}
+  .notice strong{color:var(--navy)} .notice.err{border-left-color:var(--zero-ink)}
+
+  /* Friday banner */
+  .friday{display:flex;align-items:center;gap:13px;border-radius:13px;padding:14px 18px;margin-top:16px;box-shadow:var(--shadow);font-size:14px}
+  .friday.hot{background:linear-gradient(180deg,#fff6e7,#fdeccf);border:1px solid var(--warn-line);color:var(--warn-ink)}
+  .friday.warm{background:#fff;border:1px solid var(--line);color:var(--muted)}
+  .friday .fi{font-size:20px;flex:0 0 auto}
+  .friday b{color:var(--navy)}
+  .friday .grow{flex:1}
+
+  /* KPI */
+  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0 6px}
+  @media(max-width:760px){.summary{grid-template-columns:repeat(2,1fr)}}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:15px 16px;box-shadow:var(--shadow)}
+  .stat .n{font-family:"Adamina",serif;font-size:27px;color:var(--navy);line-height:1}
+  .stat .l{font-size:11.5px;color:var(--muted);margin-top:7px;letter-spacing:.3px}
+  .stat.good .n{color:var(--teal-deep)} .stat.flag .n{color:var(--warn-ink)} .stat.zero .n{color:var(--zero-ink)} .stat.blue .n{color:var(--blue-ink)} .stat.action .n{color:var(--zero-ink)}
+  .stat.action{border-color:var(--zero-line);background:#fff7f7}
+
+  /* section heads */
+  .sec-head{display:flex;align-items:baseline;gap:10px;margin:30px 0 2px;flex-wrap:wrap}
+  .sec-head h2{font-size:20px}
+  .sec-head .cnt{font-size:12.5px;color:var(--muted)}
+  .sec-sub{font-size:12.5px;color:var(--muted);margin:2px 0 12px}
+
+  /* Action groups */
+  .agroup{background:var(--card);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);margin-top:14px;overflow:hidden}
+  .agroup-head{display:flex;align-items:center;gap:11px;padding:13px 18px;border-bottom:1px solid var(--line)}
+  .agroup-head .ic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto}
+  .agroup-head h3{font-size:15px;font-family:"Commissioner",sans-serif;font-weight:700;color:var(--navy)}
+  .agroup-head .meta{font-size:12px;color:var(--muted)}
+  .agroup-head .pill{margin-left:auto;font-size:12px;font-weight:700;padding:4px 11px;border-radius:999px}
+  .g-init .ic{background:var(--teal-soft);color:var(--teal-deep)} .g-init .pill{background:var(--teal-soft);color:var(--teal-deep)}
+  .g-final .ic{background:var(--blue-soft);color:var(--blue-ink)} .g-final .pill{background:var(--blue-soft);color:var(--blue-ink)}
+  .g-offer .ic{background:var(--warn-bg);color:var(--warn-ink)} .g-offer .pill{background:var(--warn-bg);color:var(--warn-ink)}
+  .g-pre .ic{background:#eef3fb;color:var(--navy)} .g-pre .pill{background:#eef3fb;color:var(--navy)}
+  .g-reject .ic{background:var(--zero-bg);color:var(--zero-ink)} .g-reject .pill{background:var(--zero-bg);color:var(--zero-ink)}
+
+  .arow{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid #f0f5f0}
+  .arow:last-child{border-bottom:none}
+  .arow .who{flex:0 0 200px;min-width:0}
+  .arow .who .nm{font-weight:700;color:var(--navy);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .arow .who .ro{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .arow .why{flex:1;min-width:0;font-size:13px;color:#33414f}
+  .arow .why .days{font-weight:700}
+  .arow .why .days.urgent{color:var(--zero-ink)} .arow .why .days.mid{color:var(--warn-ink)}
+  .arow .act{flex:0 0 auto;display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+  @media(max-width:720px){.arow{flex-wrap:wrap}.arow .who{flex:1 0 100%}.arow .why{flex:1 0 100%}.arow .act{flex:1 0 100%;justify-content:flex-start}}
+
+  .allclear{background:#f3fcf8;border:1px solid var(--teal-soft);border-radius:14px;padding:22px 20px;color:var(--ok-ink);font-size:14px;display:flex;align-items:center;gap:11px;margin-top:14px;box-shadow:var(--shadow)}
+  .allclear .big{font-family:"Adamina",serif;font-size:16px;color:var(--navy)}
+
+  /* reject email */
+  .mailbox{padding:4px 18px 18px;border-top:1px solid var(--line);background:#fbfdfc}
+  .mail-toggle{font-size:13px;color:var(--teal-deep);font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:10px 0}
+  .mail-body{display:none;margin-top:4px}
+  .mail-body.open{display:block}
+  .subjline{font-size:12.5px;color:var(--muted);margin:6px 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .subjline b{color:var(--navy)}
+  .email-preview{background:#fff;border:1px solid var(--line);border-radius:11px;padding:18px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;color:#26313f;line-height:1.55;max-width:680px}
+  .email-preview p{margin:0 0 12px}
+  .copy-row{display:flex;align-items:center;gap:10px;margin-top:11px;flex-wrap:wrap}
+  .copied{font-size:12.5px;color:var(--teal-deep);font-weight:600;opacity:0;transition:.2s} .copied.show{opacity:1}
+
+  /* funnel (compact) */
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:18px 20px 20px;margin-top:14px}
+  .panel h2{font-size:18px;margin-bottom:2px}
+  .panel .ph{font-size:12.5px;color:var(--muted);margin-bottom:14px}
+  .funnel{display:flex;flex-direction:column;gap:8px}
+  .fstage{display:flex;align-items:center;gap:12px}
+  .fstage .lab{flex:0 0 132px;font-size:12.5px;color:var(--navy);font-weight:600}
+  .fstage .track{flex:1;background:#f1f6f2;border-radius:8px;height:30px;overflow:hidden}
+  .fstage .fill{height:100%;border-radius:8px;background:linear-gradient(90deg,var(--teal),var(--teal-deep));display:flex;align-items:center;padding:0 11px;color:#fff;font-weight:700;font-size:13px;min-width:30px;transition:width .5s ease}
+  .fstage .conv{flex:0 0 92px;font-size:11.5px;color:var(--muted);text-align:right}
+  .fstage .conv b{color:var(--teal-deep)}
+
+  /* two-up panels + role bar list */
+  .grid2{display:grid;grid-template-columns:1.1fr 1fr;gap:14px}
+  @media(max-width:880px){.grid2{grid-template-columns:1fr}}
+  .grid2 .panel{margin-top:14px}
+  .rolelist{display:flex;flex-direction:column;gap:8px;margin-top:4px;max-height:300px;overflow-y:auto}
+  .rolebar{display:flex;align-items:center;gap:11px;cursor:pointer;border-radius:8px;padding:2px 4px;transition:.12s}
+  .rolebar:hover{background:#f3fcf8}
+  .rolebar.sel{background:#eefbf6;outline:1px solid var(--teal-soft)}
+  .rolebar .rlab{flex:0 0 168px;font-size:12.5px;color:var(--navy);line-height:1.2;display:flex;align-items:center;gap:7px;min-width:0}
+  .rolebar .rlab .nm2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rolebar .rtrack{flex:1;background:#f1f6f2;border-radius:7px;height:20px;overflow:hidden}
+  .rolebar .rfill{height:100%;border-radius:7px;background:linear-gradient(90deg,var(--teal),var(--teal-deep));transition:width .5s}
+  .rolebar .rval{flex:0 0 30px;text-align:right;font-size:13px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+  .rolebar .ract{flex:0 0 auto;font-size:10.5px;color:var(--muted)}
+  .dot{width:9px;height:9px;border-radius:3px;flex:0 0 9px;background:var(--teal)}
+  .rolehint{font-size:11.5px;color:var(--muted);margin-top:10px}
+  .reasons-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:760px){.reasons-grid{grid-template-columns:1fr;gap:18px}}
+  .reasons-sub{font-size:13px;color:var(--navy);font-weight:600;margin:2px 0 10px}
+  .reasons-sub span{font-weight:400;color:var(--muted)}
+  .rslist{display:flex;flex-direction:column;gap:8px}
+  .rsbar{display:flex;align-items:center;gap:10px;cursor:pointer;border-radius:8px;padding:2px 4px;transition:.12s}
+  .rsbar:hover{background:#f3fcf8}
+  .rsbar.sel{background:#eefbf6;outline:1px solid var(--teal-soft)}
+  .rsbar .rslab{flex:0 0 152px;font-size:12.5px;color:var(--navy);display:flex;align-items:center;gap:7px;line-height:1.2}
+  .rsbar .rstrack{flex:1;background:#f1f6f2;border-radius:7px;height:20px;overflow:hidden}
+  .rsbar .rsfill{height:100%;border-radius:7px;transition:width .5s}
+  .rsbar .rsval{flex:0 0 26px;text-align:right;font-size:13px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+  .rsbar .rsdot{width:9px;height:9px;border-radius:3px;flex:0 0 9px}
+  .rolefilter-note{display:flex;align-items:center;gap:10px;background:#eefbf6;border:1px solid var(--teal-soft);border-radius:10px;padding:8px 13px;font-size:12.5px;color:var(--navy);margin:10px 0 0}
+  .rolefilter-note b{color:var(--teal-deep)}
+  .rolefilter-note button{margin-left:auto}
+
+  /* table */
+  .filters{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 2px;align-items:center}
+  .chip-f{font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;transition:.13s}
+  .chip-f:hover{border-color:var(--teal)}
+  .chip-f.on{background:var(--navy);border-color:var(--navy);color:#fff}
+  .tbl-scroll{overflow-x:auto;margin-top:10px;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);background:#fff}
+  .tbl-scroll.vscroll{max-height:680px;overflow-y:auto}
+  .arows.scroll{max-height:760px;overflow-y:auto}
+  .arows.scroll{scrollbar-width:thin}
+  .sortsel{padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px;color:var(--ink);background:#fff;cursor:pointer}
+  .sortsel:focus{outline:none;border-color:var(--teal)}
+  .scrollnote{font-size:11.5px;color:var(--muted);padding:7px 14px;background:#fbfdfb;border-bottom:1px solid var(--line)}
+  .tabletools{display:flex;align-items:center;gap:12px;margin:10px 0 0}
+  .tabletools .toolnote{font-size:11.5px;color:var(--muted)}
+  .notesbtn{position:relative;display:inline-flex;align-items:center;gap:6px}
+  .fbdot{width:7px;height:7px;border-radius:50%;background:var(--teal);display:inline-block}
+  tr.fbk-row td{background:#f7fcfa;border-bottom:1px solid #f0f5f0;padding:0}
+  .fbk-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;padding:14px 16px 16px}
+  .fbk-item{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .fbk-label{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--teal-deep);margin-bottom:4px}
+  .fbk-text{font-size:13px;color:#26313f;line-height:1.5;white-space:pre-wrap}
+  .fbk-empty{padding:14px 16px;font-size:12.5px;color:var(--muted)}
+  table.cand{border-collapse:collapse;width:100%;font-size:13px}
+  table.cand thead th{font-family:"Commissioner",sans-serif;font-weight:600;text-align:left;color:var(--muted);font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;padding:11px 14px;border-bottom:1px solid var(--line);background:#fbfdfb;white-space:nowrap;position:sticky;top:0}
+  table.cand td{padding:10px 14px;border-bottom:1px solid #f0f5f0;vertical-align:middle}
+  table.cand tr:last-child td{border-bottom:none}
+  table.cand tbody tr{cursor:pointer;transition:.1s}
+  table.cand tbody tr:hover{background:#f7fcfa}
+  table.cand .nm{font-weight:600;color:var(--navy)}
+  table.cand .ro{font-size:12px;color:var(--muted)}
+  .dt{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .dt.none{color:#c2ccc8}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;white-space:nowrap}
+  .b-offer{background:var(--warn-bg);color:var(--warn-ink)} .b-final{background:var(--blue-soft);color:var(--blue-ink)}
+  .b-init{background:var(--teal-soft);color:var(--teal-deep)} .b-screen{background:#eef3fb;color:var(--navy)}
+  .b-pool{background:var(--gold-soft);color:var(--gold)} .b-hired{background:var(--ok-bg);color:var(--ok-ink)}
+  .b-rej{background:#f9cfcf;color:var(--zero-ink)} .b-wd{background:#eee;color:#6b7280}
+  .flagdot{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600}
+  .flagdot .d{width:9px;height:9px;border-radius:50%}
+  .fd-urgent .d{background:var(--zero-ink)} .fd-urgent{color:var(--zero-ink)}
+  .fd-mid .d{background:var(--warn-ink)} .fd-mid{color:var(--warn-ink)}
+  .fd-ok .d{background:var(--teal)} .fd-ok{color:var(--teal-deep)}
+  .fd-none{color:#b6c0bc;font-size:12px}
+  .rowact{display:flex;gap:6px}
+
+  /* settings */
+  .settings{background:var(--card);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);margin-top:14px;overflow:hidden;display:none}
+  .settings.open{display:block}
+  .settings .sh{padding:14px 18px;border-bottom:1px solid var(--line);font-family:"Adamina",serif;font-size:16px;color:var(--navy)}
+  .settings .sbody{padding:16px 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+  .sfield{display:flex;flex-direction:column;gap:5px}
+  .sfield label{font-size:12.5px;font-weight:600;color:var(--navy);display:flex;align-items:center;gap:8px}
+  .sfield .hintx{font-size:11.5px;color:var(--muted)}
+  .sfield .row{display:flex;align-items:center;gap:8px}
+  .sfield input[type=number]{width:62px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:13px}
+  .sw{position:relative;display:inline-block;width:38px;height:21px;flex:0 0 38px}
+  .sw input{opacity:0;width:0;height:0}
+  .sw .sl{position:absolute;inset:0;background:#cfd9d4;border-radius:999px;transition:.15s;cursor:pointer}
+  .sw .sl:before{content:"";position:absolute;width:15px;height:15px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s}
+  .sw input:checked+.sl{background:var(--teal)} .sw input:checked+.sl:before{transform:translateX(17px)}
+
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(20,33,60,.42);display:none;align-items:flex-start;justify-content:center;padding:34px 16px;z-index:50;overflow:auto}
+  .overlay.open{display:flex}
+  .modal{background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(20,33,60,.3);width:100%;max-width:680px;overflow:hidden}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line)}
+  .modal-head h2{font-size:20px}
+  .modal-head .x{border:none;background:none;font-size:22px;color:var(--muted);cursor:pointer;line-height:1}
+  .modal-body{padding:18px 22px;max-height:64vh;overflow:auto}
+  .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:560px){.fgrid{grid-template-columns:1fr}}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field.full{grid-column:1/-1}
+  .field label{font-size:12px;font-weight:600;color:var(--navy);letter-spacing:.2px}
+  .field input,.field select,.field textarea{font-family:inherit;font-size:13.5px;color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#fff}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--teal)}
+  .field textarea{resize:vertical;min-height:54px}
+  .field .sub{font-size:11px;color:var(--muted)}
+  .modal-foot{display:flex;align-items:center;gap:10px;padding:15px 22px;border-top:1px solid var(--line);background:#fbfdfc}
+  .modal-foot .del{margin-right:auto;color:var(--zero-ink);background:#fff;border:1px solid var(--zero-line)}
+  .modal-foot .del:hover{background:var(--zero-bg)}
+  .modal-foot .del.armed{background:var(--zero-ink);color:#fff;border-color:var(--zero-ink)}
+  .modal-foot .del.armed:hover{background:#7f2020}
+
+  .empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:14px}
+  .empty .big{font-family:"Adamina",serif;font-size:18px;color:var(--navy);margin-bottom:8px}
+  footer{margin-top:40px;font-size:11.5px;color:#94a3a0;text-align:center}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:10px;box-shadow:0 8px 30px rgba(20,33,60,.35);opacity:0;transition:.22s;pointer-events:none;z-index:80}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><g fill="#1e3565">
+      <circle cx="24" cy="24" r="5.4"/>
+      <rect x="22.4" y="1.5" width="3.2" height="11" rx="1.6"/><rect x="22.4" y="35.5" width="3.2" height="11" rx="1.6"/>
+      <rect x="1.5" y="22.4" width="11" height="3.2" rx="1.6"/><rect x="35.5" y="22.4" width="11" height="3.2" rx="1.6"/>
+      <g transform="rotate(45 24 24)"><rect x="22.6" y="5" width="2.8" height="9" rx="1.4"/><rect x="22.6" y="34" width="2.8" height="9" rx="1.4"/><rect x="5" y="22.6" width="9" height="2.8" rx="1.4"/><rect x="34" y="22.6" width="9" height="2.8" rx="1.4"/></g>
+    </g></svg>
+    <div>
+      <h1>Provider Pipeline <span class="tag">Action Tracker</span></h1>
+      <div class="sub">Nao Medical · Who is waiting, how long, and what to do next</div>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <div class="asof" title="Flags are measured against this date. Defaults to today; change it to look ahead or back.">
+      <span>As of</span>
+      <input type="date" id="refDate">
+      <span class="wd" id="refWeekday"></span>
+    </div>
+    <button class="btn navy editor-only" id="addBtn">+ Add candidate</button>
+    <input class="search" id="search" placeholder="Search name, role, status…">
+    <div class="spacer"></div>
+    <button class="btn ghost tiny editor-only" id="settingsBtn">⚙ Flag rules</button>
+    <button class="btn ghost tiny editor-only" id="importBtn">⤒ Replace from .xlsx/CSV</button>
+    <input type="file" id="fileImport" accept=".xlsx,.xls,.csv" style="display:none">
+    <button class="btn ghost tiny" id="dlBtn">⤓ Export CSV</button>
+    <button class="btn ghost tiny editor-only" id="resetBtn">↺ Reload original</button>
+    <div class="authbox"><span class="who" id="authStatus">View-only</span><button class="btn ghost tiny" id="loginBtn">Log in</button></div>
+  </div>
+
+  <div id="settingsPanel" class="settings"></div>
+  <div id="authNotice" class="readonly-note">Public view-only mode. Log in to add, edit, delete, import, run quick actions, or change flag rules.</div>
+  <div id="parseNotice"></div>
+  <div id="fridayBanner"></div>
+  <div class="summary" id="summary"></div>
+
+  <div class="sec-head"><h2>Needs a next step</h2><span class="cnt" id="actionCount"></span></div>
+  <div class="sec-sub">Candidates whose ball is in your court or the hiring manager's. Update a record to clear it, or use the quick actions.</div>
+  <div id="actionCenter"></div>
+
+  <div id="contextPanels"></div>
+
+  <div class="sec-head"><h2>All candidates</h2><span class="cnt" id="tableCount"></span>
+    <select class="sortsel" id="sortSel" style="margin-left:auto" title="Sort the table">
+      <option value="priority">Sort: needs action first</option>
+      <option value="az">Sort: name A to Z</option>
+      <option value="za">Sort: name Z to A</option>
+      <option value="days">Sort: most days waiting</option>
+      <option value="role">Sort: role A to Z</option>
+    </select>
+  </div>
+  <div class="filters" id="filters"></div>
+  <div id="tableWrap"></div>
+
+  <footer>Shared read-only public dashboard · Edits require Supabase login · Nao Medical People &amp; Operations</footer>
+</div>
+
+<!-- Add / Edit modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head"><h2 id="modalTitle">Add candidate</h2><button class="x" id="modalClose">×</button></div>
+    <div class="modal-body">
+      <div class="fgrid">
+        <div class="field full"><label>Candidate name</label><input id="f_name" placeholder="First Last"></div>
+        <div class="field"><label>Position</label><input id="f_role" list="roleList" placeholder="e.g. Family Nurse Practitioner"></div>
+        <datalist id="roleList"></datalist>
+        <div class="field"><label>Location</label><input id="f_location" placeholder="e.g. Remote, Mineola"></div>
+        <div class="field"><label>Employment type</label><input id="f_emp" list="empList" placeholder="FT / PT / Per Diem"></div>
+        <datalist id="empList"><option value="FT"><option value="PT"><option value="Per Diem"></datalist>
+        <div class="field"><label>Status / stage</label>
+          <select id="f_status"></select>
+        </div>
+        <div class="field"><label>Pre-screen date</label><input type="date" id="f_pre"><span class="sub">When the pre-screen happened</span></div>
+        <div class="field"><label>Initial interview date</label><input type="date" id="f_init"><span class="sub">With Mike or initial round</span></div>
+        <div class="field"><label>Final interview date</label><input type="date" id="f_fin"><span class="sub">With Dr. Jain or final round</span></div>
+        <div class="field"><label>Offer sent date</label><input type="date" id="f_oSent"></div>
+        <div class="field"><label>Offer accepted date</label><input type="date" id="f_oAcc"></div>
+        <div class="field full"><label>Recruiter notes</label><textarea id="f_recFeedback" placeholder="Your notes"></textarea></div>
+        <div class="field full"><label>Mike's comment</label><textarea id="f_mikeComment"></textarea></div>
+        <div class="field full"><label>Dr. Priti's feedback</label><textarea id="f_pritiFeedback"></textarea></div>
+        <div class="field full"><label>Reason declined / withdrawn</label><input id="f_reason" placeholder="Only if closed"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn del" id="modalDelete" style="display:none">Delete</button>
+      <button class="btn ghost" id="modalCancel">Cancel</button>
+      <button class="btn" id="modalSave">Save candidate</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   SEED DATA (your real 67 candidates, injected at build time)
+   ============================================================ */
+const SEED = [{"name": "Jhanna Francisco", "position": "Psych Nurse Practitioner", "status": "Declined", "prescreen": "Thursday, May 7⋅12:00 – 12:20pm", "initial": "Friday, May 8⋅1:00 – 1:30pm", "final": "Thursday, May 14⋅3:15 – 3:45pm", "offerSent": "2026-05-16", "offerAccepted": "", "location": "Remote", "emp": "FT", "recFeedback": "Move forward as per DP, waiting for new hire form", "mikeComment": "We can offer 55-60/hr base(prorated over as a salary) with 25 for intake and 15 for follow up. Please schedule for next interview. She will be available to start end of June If she wants time before the incentive we can do $80 for 3mon then transition to the incentive.\"", "pritiFeedback": "", "reason": "Compensation does not align"}, {"name": "Dr. Kevin Keith", "position": "Pediatrician", "status": "Declined", "prescreen": "Tuesday, April 28⋅2:30 – 3:00pm", "initial": "", "final": "Thursday, May 14⋅4:00 – 4:30pm", "offerSent": "2026-05-19", "offerAccepted": "", "location": "Brooklyn", "emp": "FT", "recFeedback": "Declined offer, wants a higher rate", "mikeComment": "", "pritiFeedback": "", "reason": "Compensation does not align"}, {"name": "Bryanna McKinnon", "position": "Psych Nurse Practitioner", "status": "Declined", "prescreen": "Tuesday, May 12⋅1:20 – 1:40pm", "initial": "Wednesday, May 13⋅2:30 – 3:00pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "Remote", "emp": "FT", "recFeedback": "Accept another job", "mikeComment": "I liked Bryanna. Please move to 2nd interview. Shes pretty new, maybe a little nervous. Im not sure how much she could churn through patients but I would be comfortable with $70/hr", "pritiFeedback": "", "reason": "Accepted offer from a different company"}, {"name": "MaLinda Miller", "position": "Family Nurse Practitioner", "status": "Declined", "prescreen": "Tuesday, May 12⋅3:20 – 3:40pm", "initial": "Wednesday, May 20⋅1:00 – 1:30pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "Remote", "emp": "FT", "recFeedback": "Accepted offer to a diff comp", "mikeComment": "I liked Malina. She is basically a new grad psych NP so I am a little worried without the proper infrastructure set up how she will do, she seems to be looking for a practice with a psychiatrist in place to help with patients.", "pritiFeedback": "", "reason": "Accepted offer from a different company"}, {"name": "Oluchukwu Usoh", "position": "Peds Physician Assstant", "status": "Declined", "prescreen": "Wednesday, May 27⋅1:00 – 1:20pm", "initial": "Thursday, May 28⋅1:00 – 1:30pm", "final": "Thursday, June 4⋅2:30 – 3:00pm", "offerSent": "2026-06-05", "offerAccepted": "", "location": "Canarsie", "emp": "FT", "recFeedback": "Peds PA and Psych PA, is looking for a full-time position in Canarsie. Although she mainly applied for the Peds PA role, she is also interested if we are offering a Psych PA role. She is asking for $75/hr and can start ASAP if the interview goes well. Let me know what day and time I can schedule her; she is available anytime. - Email Invitation Sent for Final interview", "mikeComment": "So Oly was amazing. Shes super personable. However she lives in the bronx. So canarsie would be too far. She has IM exp so i discussed with her regarding our bronx locations and i think she'd be a really good fit. She needs about a month. we can offer $75/hr but needs CDL. Lets get her final interview ASAP. I think if we're in a pinch we could have her go to canarsie to cover a shift if theres like a call out or emergency", "pritiFeedback": "", "reason": "Accepted offer from a different company"}, {"name": "Deborah Baum", "position": "Psych Nurse Practitioner", "status": "Declined", "prescreen": "Wednesday, May 6⋅2:20 – 2:40pm", "initial": "Monday, May 11⋅2:00 – 2:30pm", "final": "Thursday, May 28⋅4:00 – 4:30pm", "offerSent": "2026-05-30", "offerAccepted": "", "location": "Remote", "emp": "FT", "recFeedback": "Sched for final interview: \" Any day this week between 2-3 pm other than tomorrow.\"", "mikeComment": "offer 55-60/hr base (prorated over as a salary) with 25 for intake and 15 for follow up.", "pritiFeedback": "", "reason": "Compensation does not align"}, {"name": "Tezra White", "position": "Psych Nurse Practitioner", "status": "Declined", "prescreen": "", "initial": "Monday, May 4⋅10:00 – 10:30am", "final": "Monday, May 11⋅2:30 – 3:00pm", "offerSent": "", "offerAccepted": "", "location": "Remote", "emp": "FT", "recFeedback": "She declined: https://mail.google.com/mail/u/0/#search/t/QgrcJHsBtPnFzGBbBjctVckTCBqTQvZmQgG?compose=DmwnWrRsppsgZFkTswLbxnFZXhNDMfFVMvVxRlTvPVZFldsKFFThQQLDMdrdXhKBGnhmHHXKkDSl", "mikeComment": "", "pritiFeedback": "", "reason": "Accepted offer from a different company"}, {"name": "Allison Cardenas", "position": "Family Nurse Practitioner", "status": "Declined", "prescreen": "May 21, Thu 1:35 – 1:55pm", "initial": "May 27, Wed 2:30 – 3pm", "final": "Thursday, June 11⋅2:00 – 2:30pm", "offerSent": "2026-06-15", "offerAccepted": "", "location": "AST, LIC, MIN", "emp": "FT", "recFeedback": "FNP, is a new graduate interested in the new grad program and would like to discuss it further during the initial interview. She is looking for a full-time position, available Monday through Sunday, and is asking for $70/hr. AST, JH, LIC She is available to interview tomorrow at 1:30 PM, next week on Wednesday at 1 PM, and all day Friday the 29th.", "mikeComment": "Allison clinically is a little green. Seems nervous. Can start september. Ast + JH Spanish speaking. We can schedule a second interview but non urgently", "pritiFeedback": "No feedback", "reason": "Compensation does not align"}, {"name": "Demi Reece", "position": "Family Nurse Practitioner", "status": "Done with Final interview Waitlist for offer", "prescreen": "May 18, Mon 1 – 1:20pm", "initial": "May 19, Tue 11:30am – 12pm", "final": "Thursday, June 4⋅3:30 – 4:00pm", "offerSent": "", "offerAccepted": "", "location": "AST, LIC, MIN", "emp": "FT", "recFeedback": "Demi Reece, FNP, is a new graduate interested in learning more about our new grad program. She has seven years of experience as an ER nurse and is looking for a full-time position in either Astoria, Long Island City, or Mineola, with a salary expectation of $70/hr.", "mikeComment": "I liked Demi. We can move forward to 2nd interview. New grad program", "pritiFeedback": "So so with Demi", "reason": ""}, {"name": "Myrline Belizaire", "position": "Psych Nurse Practitioner", "status": "Final Interview", "prescreen": "Monday, June 1⋅1:00 – 1:20pm", "initial": "Monday, June 8⋅2:00 – 2:30pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "Remote", "emp": "FT", "recFeedback": "Myrline Belizaire, a full-time Psychiatric Nurse Practitioner (NP), has completed the required 3,600 hours and is asking for $85/hour. I explained the per-patient model to her, and she would love to discuss it further during an initial interview.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Adekemi Julius", "position": "Physician Assistant", "status": "Final Interview", "prescreen": "Jun 2, Tue 3:20 – 3:40pm", "initial": "Jun 11, Thu 10 – 10:30am", "final": "Thursday, June 25⋅1:30 – 2:00pm", "offerSent": "", "offerAccepted": "", "location": "Bronx", "emp": "FT", "recFeedback": "Adekemi Julius, PA, new grad looking for FT in Bronx, asking rate is negotiable.", "mikeComment": "I really liked Kemi. Seems very passionate about preventive health. new grad program, can start ASAP. $65/hr. Just let her know during training she'll be bouncing around sites to train with different providers", "pritiFeedback": "", "reason": ""}, {"name": "Alexandre Esperance", "position": "Site Manager", "status": "Final Interview", "prescreen": "Monday, June 15⋅1:35 – 1:55pm", "initial": "Wednesday, June 17⋅2:00 – 2:30pm", "final": "Thursday, June 25⋅2:30 – 3:00pm", "offerSent": "", "offerAccepted": "", "location": "Jamaica, CH", "emp": "FT", "recFeedback": "Alexandre Esperance, Site Manager for Jamaica or Crown Heights looking for FT, sking rate is negotiable. Strong candidate fit: multi-site healthcare operations at Summit Health/CityMD (HIPAA, staffing, turnover reduction, efficiency) plus current regional multi-location management; exceeds the role's required credentials; NY-based; stable tenures.", "mikeComment": "Alexandre is great, ended up interviewing for almost an hour: -did 6 sites for citymd, 3 sites for bond vet -seems to be really into coaching up and properly delegating so he can remain on high level tasks -focused on proper staffing (both efficiency and ensuring future staff is continued to be hired) -mentioned census and p/l on multiple questions -leaving job because: wants to go back to human medicine (was at citymed, then went to bond vet), wants a \"new challenge\" My red flags: -hasnt worked in a PCP office Can start: needs to give 2 week notice, and wants to finish training his replacement, so ~2-4wks. Location: lives in brooklyn Salary expectations: wants 100, but wants to look at overall package. So im thinking starting lower with 1 site, have a 30, 60, 90 day plan and he can grow to 3 sites. We can have a lower starting salary with a 6mon and 1 year performance review.", "pritiFeedback": "", "reason": ""}, {"name": "Dr. John Sciales", "position": "Physician MD/DO", "status": "Hold off", "prescreen": "Friday, June 12⋅2:45 – 3:05pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "", "emp": "FT", "recFeedback": "Dr. John Sciales wants FT in Long Island, a physician in primary care, with 30 years of clinical experience with deep expertise in cardiometabolic medicine, prevention, and chronic disease. He holds an active New York license and DEA registration, with renewals expected within the next week. His clinical practice concluded at the end of 2023, and he has spent the last two and a half years on research, writing, and patient education. His preventive, root-cause approach fits our care model, and he was highly productive in prior roles. He is comfortable with the $250k annual plus the provider bonus plan. He lives three miles from the Mineola clinic and is happy to interview in person. He would love to discuss it further during an initial interview.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Dr. Mark Bernardi", "position": "Physician MD/DO", "status": "Hold off", "prescreen": "Wednesday, June 17⋅3:20 – 3:40pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Brooklyn, DTM", "emp": "PT", "recFeedback": "Dr. Mark Bernardi is seeking a part-time position in Brooklyn or DTM. He is a board-certified emergency medicine physician looking to transition into urgent and primary care, and his rate is negotiable.", "mikeComment": "Hold off", "pritiFeedback": "", "reason": ""}, {"name": "Perminder Kaur", "position": "Family Nurse Practitioner", "status": "Initial w/ Mike", "prescreen": "Friday, June 12⋅1:35 – 1:55pm", "initial": "Tuesday, June 23⋅1:00 – 1:30pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "Long Island", "emp": "FT", "recFeedback": "Perminder Kaur, a full-time, FNP-certified with her New York license expected around June 20. She is currently in Texas and will be moving back to New York (Paramus, NJ). She is new to the FNP role but brings roughly 8 years of bedside nursing experience and two DAISY Awards. Multilingual Hindi, Urdu, Punjabi, and English, location, anywhere close to her. She did not give a fixed rate and is open to our new grad program. But since she has 8 years exp of nursing she wanted to negotiate but would like to learn more about the new grad program I'll schedule her for an initial interview", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Saidat Oluwo", "position": "Psych Nurse Practitioner", "status": "Initial w/ Mike", "prescreen": "Friday, June 12⋅2:10 – 2:30pm", "initial": "Wednesday, June 24⋅12:00 – 12:30pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "Canarsie", "emp": "FT", "recFeedback": "Saidat Oluwo, PNP, Looking for FT in Canarsie, open to Brooklyn has 15 years of nursing experience. She is currently a pediatrics nurse manager over PICU and NICU and is ready to step out of management to return to practicing as an NP. Pediatrics Salary expectation - negotiable, will schedule her for initial interview.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Keanu Nicasio", "position": "Social worker", "status": "Initial w/ Mike", "prescreen": "Thursday, June 18⋅3:00 – 3:30pm", "initial": "Thursday, June 18⋅10:30 – 11:00am", "final": "", "offerSent": "", "offerAccepted": "", "location": "Mineola", "emp": "FT", "recFeedback": "", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Michelle Suyunova", "position": "Family Nurse Practitioner", "status": "Initial w/ Mike", "prescreen": "Monday, June 15⋅3:20 – 3:40pm", "initial": "Wednesday, June 24⋅11:00 – 11:30am", "final": "", "offerSent": "", "offerAccepted": "", "location": "", "emp": "FT", "recFeedback": "", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Alexander Kotov", "position": "Family Nurse Practitioner", "status": "Initial w/ Mike", "prescreen": "Tuesday, June 16⋅2:10 – 2:30pm", "initial": "Thursday, June 25⋅10:00 – 10:30am", "final": "", "offerSent": "", "offerAccepted": "", "location": "Mineola, Hicks", "emp": "FT", "recFeedback": "Alexander Kotov is a board-certified Family NP with approximately 25 years of experience. He is a stable, local candidate specializing in primary care for all ages with a focus on allergy and immunotherapy. He is fluent in Russian and is seeking full-time or part-time work, preferably in Hicksville or Mineola. His asking rate is $90/hr.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Joanna Dinh", "position": "Social worker", "status": "Initial w/ Mike", "prescreen": "Wednesday, June 17⋅1:35 – 1:55pm", "initial": "Monday, June 29⋅2:00 – 2:30pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "Mineola", "emp": "FT", "recFeedback": "Joanna Dinh, LMSW, has completed her hours for LMSW but is seeking supervision to pursue her LCSW. She is looking for a full-time position in Mineola with a rate of $40/hr and has experience working with patients who have substance use disorders.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Tiffany Natel", "position": "Family Nurse Practitioner", "status": "Initial w/ Mike", "prescreen": "Wednesday, June 17⋅2:45 – 3:05pm", "initial": "Monday, July 6⋅2:00 – 2:30pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "", "emp": "", "recFeedback": "", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Juan Febres", "position": "Site Manager", "status": "No Show", "prescreen": "Monday, June 15⋅2:10 – 2:30pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "", "emp": "", "recFeedback": "", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Conrad Olonimoyo", "position": "Psych Nurse Practitioner", "status": "No Show", "prescreen": "Wednesday, May 13⋅2:20 – 2:40pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Remote", "emp": "FT", "recFeedback": "", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Lori Saraf", "position": "Peer Advocate", "status": "No Show", "prescreen": "Tuesday, June 16⋅1:00 – 1:20pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "", "emp": "", "recFeedback": "", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Tylene Soto", "position": "Site Manager", "status": "No Show", "prescreen": "Tuesday, June 16⋅1:35 – 1:55pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "", "emp": "", "recFeedback": "", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Ella Najd Aljonubi", "position": "Physician Assistant", "status": "Not Responsive", "prescreen": "Thursday, May 7⋅1:45 – 2:05pm", "initial": "Monday, May 11⋅1:00 – 1:30pm", "final": "Thursday, May 14⋅11:30am – 12:00pm", "offerSent": "", "offerAccepted": "", "location": "Hicksville", "emp": "FT", "recFeedback": "Wants a higher rate doesnt like the new grad program", "mikeComment": "The new grad program is 3mon of training at half rate. Then they start at $65 an hour. They have a 2 year contract.", "pritiFeedback": "", "reason": "Not Responsive"}, {"name": "Emely Hilario", "position": "Physician Assistant", "status": "Not Responsive", "prescreen": "", "initial": "", "final": "Thursday, June 4⋅1:00 – 1:30pm", "offerSent": "", "offerAccepted": "", "location": "Bronx 174th", "emp": "FT", "recFeedback": "Emily Hilario, a PA looking for full-time work in Bronx 174th, is multilingual in Spanish. She is asking for $72–$75 per hour and requires one month's notice for her current job.", "mikeComment": "I liked emely by the way. speaks spanish will need about 3 weeks of training $73 after CDL", "pritiFeedback": "", "reason": ""}, {"name": "Dr. Shelda Kalloo", "position": "Pediatrician", "status": "Not Responsive", "prescreen": "", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Can", "emp": "FT", "recFeedback": "Endorsed from previous Recrutier Patricia", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Sophia Belnavis", "position": "Family Nurse Practitioner", "status": "Initial w/ Mike", "prescreen": "Thursday, June 18⋅2:10 – 2:30pm", "initial": "Tuesday, June 30⋅1:00 – 1:30pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "Mineola, Hicksville, Jamaica", "emp": "FT", "recFeedback": "Sophia Belnavis, FNP, has 7 years exp as MCU,CCU nurse, looking for FT in Mineola, Hicksville or Jamaica, asking is $70+ /hr", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Nioleden Jean-Joseph", "position": "Family Nurse Practitioner", "status": "Initial w/ Mike", "prescreen": "Thursday, June 18⋅2:45 – 3:05pm", "initial": "Wednesday, July 1⋅11:00 – 11:30am", "final": "", "offerSent": "", "offerAccepted": "", "location": "Long Island", "emp": "FT", "recFeedback": "Nioleden Jean-Joseph, FNP, 11 years RN experience looking for full-time in Long Island, asking for $80/hr", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Myel Hill-Hypolite", "position": "Social worker", "status": "Initial w/ Mike", "prescreen": "Friday, June 19⋅2:10 – 2:30pm", "initial": "Thursday, July 2⋅10:00 – 10:30am", "final": "", "offerSent": "", "offerAccepted": "", "location": "Mineola", "emp": "FT", "recFeedback": "Myel Hill-Hypolite, LMSW, has over 15 years of experience and is trauma-certified. She is on track to receive her LCSW in August and is currently our strongest candidate for the social worker position. She has experience in SUD, is seeking a full-time role at an annual salary of $83k, and is willing to rotate between all sites as needed.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Keyrisa Gillies", "position": "Family Nurse Practitioner", "status": "Initial w/ Mike", "prescreen": "Friday, June 19⋅2:45 – 3:05pm", "initial": "Wednesday, July 1⋅2:00 – 2:30pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "CH, Brooklyn", "emp": "FT", "recFeedback": "Keyrisa Gillies is a new graduate FNP with 15 years of experience as an ER RN. She is seeking full-time in CH and is open to any Brooklyn location. Her requested rate is $75/hr based on her RN experience, though she is open to discussing the new graduate training program.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Tania Bari", "position": "Physician Assistant", "status": "Initial w/ Mike", "prescreen": "Friday, June 19⋅3:20 – 3:40pm", "initial": "Wednesday, July 1⋅3:00 – 3:30pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "NHSC-Approved Site, Crown Heights, Brooklyn", "emp": "FT", "recFeedback": "Tania Bari, PA, is looking for a full-time position at our NHSC-approved site in Crown Heights, Brooklyn. She has two years of experience as a PA and is requesting $75/hr. I discussed the NHSC program with her, and she is interested; I will now schedule her for an initial interview.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Dr. Oliver Ting", "position": "Physician MD/DO", "status": "Initial w/ Mike", "prescreen": "Jun 10, Wed 2:45 – 3:05pm", "initial": "Jun 22, Mon 2 – 2:30pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "WB", "emp": "FT", "recFeedback": "Dr. Oliver Ting is well aligned with our primary care model, possessing a background in family medicine with a nutrition master's, expertise in obesity medicine and GLP-1, a focus on chronic disease and prevention, and deep experience serving underserved communities. He is seeking a full-time position in Williamsburg and is asking for $250k annually. Dr. Ting is currently in LA but plans to move back to NY once his NY license is completed, which is expected within three weeks. I thoroughly enjoyed my conversation with him and will now schedule him for an initial interview.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Shemika Benjamin", "position": "Site Manager", "status": "Initial w/ Mike", "prescreen": "Monday, June 15⋅2:45 – 3:05pm", "initial": "Thursday, June 18⋅10:00 – 10:30am", "final": "", "offerSent": "", "offerAccepted": "", "location": "Bartow", "emp": "", "recFeedback": "Shemika Benjamin is an Operations and Business Manager run the Bronx LBAPS location largely solo (about 56 clients and 44 staff, owning hiring, scheduling, budgeting, and escalations), with 20-plus years in fashion operations before that, and she already uses UKG. Logistics: confirmed for Bartow, full-time Monday to Friday with rotating weekends, and she'd give two weeks' notice from her current role. One flag worth noting up front, she earns $85k now, and this role caps at $80k, so the slight pay cut is the likely sticking point. She's available for an initial interview; let me know if you'd like to meet her.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Dr. Miole Pierre Pigeot", "position": "Pediatrician", "status": "Offer Accepted", "prescreen": "Monday, May 25⋅1:00 – 1:20pm", "initial": "Tuesday, May 26⋅11:00 – 11:30am", "final": "Thursday, May 28⋅8:00 – 8:30am", "offerSent": "2026-06-01", "offerAccepted": "2026-06-15", "location": "Canarsie", "emp": "FT", "recFeedback": "Dr. Miole, a pediatrician, is applying for the full-time position at the Canarsie location with an asking rate of $220,000 annually. She has completed an ACGME-accredited Pediatric residency program and has 23 years of experience. She is available tomorrow at 11:00 AM for an initial interview; please let me know if you can accommodate her. Site visit some time in June 2 weeks from now. July 7th start date.", "mikeComment": "Lets book ASAP for next interview, i really liked her. Seems to have a entrepreneur mindset. Grew a solo clinic at tribeca pediatrics. Can start: After July 4 Salary expectations: 220k for 40hrs", "pritiFeedback": "", "reason": ""}, {"name": "Rebecca Ramdass", "position": "Physician Assistant", "status": "Offer Accepted", "prescreen": "Thursday, May 7⋅2:20 – 2:40pm", "initial": "Monday, May 11⋅3:00 – 3:30pm", "final": "Thursday, May 14⋅11:00 – 11:30am", "offerSent": "2026-05-18", "offerAccepted": "05/21/2026 05:41p", "location": "WIL, AST, and LIC", "emp": "FT", "recFeedback": "Move forward as per DP, waiting for new hire form Confirm the location -Offer accepted - send new hire and welcome 5/22 - Reach out to her reference", "mikeComment": "The new grad program is 3mon of training at half rate. Then they start at $65 an hour. They have a 2 year contract.", "pritiFeedback": "", "reason": ""}, {"name": "Jannatul Pahi", "position": "Physician Assistant", "status": "Offer Accepted", "prescreen": "Tuesday, May 12⋅1:00 – 1:20pm", "initial": "Wednesday, May 13⋅2:00 – 2:30pm", "final": "Thursday, May 14⋅12:00 – 12:30pm", "offerSent": "2026-05-15", "offerAccepted": "2026-05-18", "location": "Hicksville Jamaica Mineola", "emp": "FT", "recFeedback": "Move forward as per DP, waiting for new hire form Offer Accepted what next Patricia Maye De Vera", "mikeComment": "i really liked Janna. We could do 75/hr but needs CDL before starting. She would take over Matt's schedule She will need ~3wks of training", "pritiFeedback": "", "reason": ""}, {"name": "Nicholas Ribbeck", "position": "Psych Nurse Practitioner", "status": "Offer Accepted", "prescreen": "Wednesday, May 6⋅12:00 – 12:20pm", "initial": "Thursday, May 7⋅1:00 – 1:30pm", "final": "Friday, May 15⋅10:30 – 11:00am", "offerSent": "2026-05-20", "offerAccepted": "2026-05-20", "location": "Remote", "emp": "FT", "recFeedback": "Follow up for hireright and references", "mikeComment": "I liked Nicholas. Same exact offer we gave Naveen (option of starting 50/hr with 25 for intake, 15 for follow up; or can start $75/hr for 3mon with an additional 3mon option then goes to the per patient model). Schedule for final interview ASAP.", "pritiFeedback": "", "reason": ""}, {"name": "Skyler Jackson", "position": "Physician Assistant", "status": "Offer Accepted", "prescreen": "Wednesday, May 27⋅1:35 – 1:55pm", "initial": "Thursday, May 28⋅2:00 – 2:30pm", "final": "Thursday, June 4⋅4:15 – 4:45pm", "offerSent": "", "offerAccepted": "", "location": "Queens, open to any", "emp": "FT", "recFeedback": "looking for a full-time position. Her location preference is flexible, but she mainly targets Astoria or anywhere in Queens, though she is open to any location. She is asking for $80/hr and can start ASAP. She is currently unemployed, having recently moved back to NY from CA. - Email Invitation Sent for Final interview", "mikeComment": "I liked skyler. Can start in about a month. Needs approx ~8 shifts of training. JH and AST. $75/hr. Needs CDL before. Id be willing to go up to 77.", "pritiFeedback": "", "reason": ""}, {"name": "Dr. Caroline Coicou", "position": "Physician MD/DO", "status": "Declined", "prescreen": "2026-06-01", "initial": "Jun 3, Wed 11:30am – 12pm", "final": "Thursday, June 15⋅1:30 – 2:00pm", "offerSent": "2026-06-15", "offerAccepted": "", "location": "Brooklyn", "emp": "PD", "recFeedback": "", "mikeComment": "I really like Dr. Coicou Brooklyn, can start in august Salary expectations 220-250. I would prefer 220 with some sortve incentive rate built in. Shes going to be expensive, but she seems extremely professional", "pritiFeedback": "", "reason": "Accepted another offer"}, {"name": "Samareea Saunders", "position": "Family Nurse Practitioner", "status": "Offer Sent", "prescreen": "Tuesday, June 2⋅1:00 – 1:20pm", "initial": "Thursday, June 4⋅10:00 – 10:30am", "final": "Friday, June 12⋅11:00 – 11:30am", "offerSent": "2026-06-15", "offerAccepted": "", "location": "WB or Queens", "emp": "FT", "recFeedback": "FNP, is looking for a full-time position. She is currently in Arizona but will move back to New York in July. She is seeking a Brooklyn (WB) or Queens location, with a negotiable salary expectation of $180,000 annually.", "mikeComment": "Samareea - brooklyn. I liked her. She has a little more than 1 year PCP exp. Im okay with $75/hr after CDL. Can start in august. Move to final interview", "pritiFeedback": "", "reason": ""}, {"name": "Viola Zilber", "position": "Physician Assistant", "status": "Offer Sent", "prescreen": "Wednesday, May 27⋅3:20 – 3:40pm", "initial": "Tuesday, June 2⋅3:45 – 4:15pm", "final": "Thursday, June 11⋅1:15 – 1:45pm", "offerSent": "", "offerAccepted": "", "location": "Queens", "emp": "FT", "recFeedback": "Viola Zilber, a Primary Care PA, is seeking a full-time position in AST or LIC. She is requesting a higher rate of $85/hr. Viola is looking to transition to a primary care clinic closer to home after 10 years with her current company. She mentioned that she specializes in primary care and most of her patients are in Queens and Brooklyn, noting that she would bring those patients with her to a new clinic. She is available Thursday to Tues after 4 PM let me know if you want to meet her.", "mikeComment": "Viola - JH, can start after 1mon notice, has planned vacation last week of august. BUt can train in meantime. I really liked her. Tons of PCP exp. Medical spanish, fluent russian. Im comfortable with 83, must be CDL certified. Can go up to $85 if she pushes back. Schedule ASAP", "pritiFeedback": "", "reason": ""}, {"name": "Christiana Adutwum", "position": "Physician Assistant", "status": "Offer Sent", "prescreen": "", "initial": "", "final": "Thursday, June 11⋅12:30 – 1:00pm", "offerSent": "", "offerAccepted": "", "location": "Bartow", "emp": "FT", "recFeedback": "", "mikeComment": "christiana we can move forward. 77 after CDL. Needs CDL before starting. Bartow main, but will do 174 as well", "pritiFeedback": "", "reason": ""}, {"name": "Jones Simon", "position": "Psych Nurse Practitioner", "status": "Reject", "prescreen": "Thursday, April 30⋅12:35 – 12:55pm", "initial": "Friday, May 15⋅11:15 – 11:45am", "final": "", "offerSent": "", "offerAccepted": "", "location": "Remote", "emp": "FT", "recFeedback": "", "mikeComment": "Jones was alright. Hes a little older so Im not sure how much tech forward he is. We can offer the same exact offer we gave Naveen (option of starting 50/hr with 25 for intake, 15 for follow up; or can start $75/hr for 3mon with an additional 3mon option then goes to the per patient model). Im not crazy about him but we can send to next interview.", "pritiFeedback": "", "reason": "Qualification does not align"}, {"name": "Matthew Krieger", "position": "Family Nurse Practitioner", "status": "Reject", "prescreen": "Thursday, May 21⋅1:00 – 1:20pm", "initial": "Wednesday, May 27⋅11:00 – 11:30am", "final": "", "offerSent": "", "offerAccepted": "", "location": "AST, LIC, MIN", "emp": "FT", "recFeedback": "looking for FT in AST or LIC, willing to obtain CDL, asking is $75/hr. He is working as an FNP but has transitioned to his current employer, Critical Health Care Registered Nursing Services, where he works as a specialized infusion nurse. Now he wanted to get back to the practice as FNP fulltime available for initial interview tomorrow at 11 am or Tuesday and Wed all day", "mikeComment": "Pass on Matt. I don’t think he’d be able to handle himself clinically with complex patients", "pritiFeedback": "", "reason": "Qualification does not align"}, {"name": "RexMaria Onyeizu", "position": "Peds Nurse Practitioner", "status": "Reject", "prescreen": "Tuesday, June 9⋅1:00 – 1:20pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Canarsie", "emp": "PT", "recFeedback": "Not impressed", "mikeComment": "", "pritiFeedback": "", "reason": "Qualification does not align"}, {"name": "OKECHUKWU Nnaji", "position": "Psych Nurse Practitioner", "status": "Reject", "prescreen": "Tuesday, May 12⋅2:10 – 2:30pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Remote", "emp": "FT", "recFeedback": "Reject", "mikeComment": "", "pritiFeedback": "", "reason": "Qualification does not align"}, {"name": "Udoka Addy", "position": "Psych Nurse Practitioner", "status": "Reject", "prescreen": "Tuesday, May 12⋅2:45 – 3:05pm", "initial": "Wednesday, May 13⋅3:30 – 4:00pm", "final": "Thursday, May 21⋅9:00 – 9:30am", "offerSent": "", "offerAccepted": "", "location": "Remote", "emp": "PD", "recFeedback": "Endorse to Mike Wed, Thurs-Tues 2:45 PM, need to schedule Wants 1099", "mikeComment": "Udoka we can move forward with. $70/hr", "pritiFeedback": "3,600 hours not completed", "reason": "Qualification does not align"}, {"name": "Jakyung Jung", "position": "Family Nurse Practitioner", "status": "Reject", "prescreen": "Wednesday, June 10⋅3:20 – 3:40pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Long Island", "emp": "FT", "recFeedback": "Not impressed", "mikeComment": "", "pritiFeedback": "", "reason": "Qualification does not align"}, {"name": "Oluwatobi Olaofe", "position": "Psych Nurse Practitioner", "status": "Reject", "prescreen": "Wednesday, May 13⋅3:20 – 3:40pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "", "emp": "", "recFeedback": "Endorse to Mike", "mikeComment": "cant accomodate in person", "pritiFeedback": "", "reason": "Qualification does not align"}, {"name": "Alexis Kuriata", "position": "Peer Advocate", "status": "Reject", "prescreen": "Tuesday, June 16⋅2:45 – 3:05pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Mineola", "emp": "PT", "recFeedback": "So, so no experience, former drug addict", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Trisha Clayton", "position": "Social worker", "status": "Reject", "prescreen": "Tuesday, June 16⋅3:20 – 3:40pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Mineola", "emp": "FT", "recFeedback": "Hours not completed yet", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Lori Saraf", "position": "Peer Advocate", "status": "Reject", "prescreen": "Wednesday, June 17⋅1:00 – 1:20pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "", "emp": "PT", "recFeedback": "Good candidate but hours not completed yet. Send an email since this is a new role we might not be able to accomodate your provision hours. but we want to keep you on the pipeline", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Danilo Martinez", "position": "Family Nurse Practitioner", "status": "Schedule for Final", "prescreen": "Jun 10, Wed 1:35 – 1:55pm", "initial": "Monday, June 15⋅2:00 – 2:30pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "WB", "emp": "FT", "recFeedback": "Danilo Martinez, MSN, FNP-BC, an experienced ER and trauma RN newly credentialed as a Family NP, looking for FT in WB, asking rate is a bit high because of ER nurse exp $85 but negotiable.", "mikeComment": "Schedule for final interview. New grad program. Canarsie", "pritiFeedback": "", "reason": ""}, {"name": "Kanika Datta", "position": "Physician Assistant", "status": "Withdraw", "prescreen": "Thursday, May 28⋅1:00 – 1:20pm", "initial": "Monday, June 1⋅2:45 – 3:15pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "DTM", "emp": "FT", "recFeedback": "", "mikeComment": "I really liked her, shes very good clinically. New grad program, $65/hr. Can start ASAP", "pritiFeedback": "", "reason": "Accepted offer from a different company"}, {"name": "Fabliha Hoque", "position": "Physician Assistant", "status": "Withdraw", "prescreen": "Thursday, May 28⋅1:35 – 1:55pm", "initial": "Wednesday, June 3⋅2:30 – 3:00pm", "final": "", "offerSent": "", "offerAccepted": "", "location": "Williamsburg", "emp": "FT", "recFeedback": "Fabliha Hoque, a New Grad, pitched the new grad program. We need to discuss the initial details again: she prefers FT work in Williamsburg but is open to Canarsie, is comfortable seeing patients of all ages, and requests $60-$70/hr.", "mikeComment": "", "pritiFeedback": "", "reason": "Accepted offer from a different company"}, {"name": "Lila Wiener", "position": "Social worker", "status": "Screening", "prescreen": "Thursday, June 18⋅3:20 – 3:40pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Remote", "emp": "FT", "recFeedback": "", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Kenny David", "position": "Family Nurse Practitioner", "status": "Screening", "prescreen": "Friday, June 19⋅1:00 – 1:20pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Crown Heights, Jackson Heights, or Jamaica", "emp": "PD", "recFeedback": "To confirm, this is Kenny David, a new grad FNP currently seeking a Per Diem position at the CH, JH, or Jamaica locations. I am available to work Friday, Saturday, and Sunday, making me well-suited for a weekend schedule.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Jessica Walker", "position": "Peds Physician Assstant", "status": "Talent Pipeline", "prescreen": "Friday, June 5⋅2:10 – 2:30pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Canarsie", "emp": "FT", "recFeedback": "Jessica Lynn Walker, a New Grad, pitched the new grad program. She is not PA certified yet and does not have a New York license, with an anticipated graduation in August and her board exam scheduled for September 10. I conducted this pre-screening interview specifically to keep her warm in our talent pipeline. She prefers full-time work at our Canarsie location (Gentle Touch P.C.), is highly comfortable seeing pediatric panels, and is completely okay with the new grad program rate of $65/hr.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Erwin Cossio", "position": "Peer Advocate", "status": "Talent Pipeline", "prescreen": "Monday, June 15⋅1:00 – 1:20pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Mineola", "emp": "PD", "recFeedback": "He is looking to work full time, put in talent pipeline in case the need for the requisition changed", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Grace Mendenhall", "position": "Physician Assistant", "status": "Talent Pipeline", "prescreen": "Thursday, June 11⋅3:20 – 3:40pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "", "emp": "FT", "recFeedback": "New grad will graduate in August, FT, AST", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Olivia Georgenton", "position": "Physician Assistant", "status": "Talent Pipeline", "prescreen": "Wednesday, June 10⋅1:00 – 1:20pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Brooklyn", "emp": "FT", "recFeedback": "Olivia Georgenton, a new-grad Physician Assistant, is not yet eligible for licensure. She graduates in August 2026 and sits for the PANCE afterward, so the earliest realistic start is fall 2026, pending boards and NY licensure. She is a pipeline candidate for a fall seat, not an immediate hire.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Zureisy Garcia", "position": "Social worker", "status": "Talent Pipeline", "prescreen": "Friday, June 19⋅1:35 – 1:55pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Mineola", "emp": "FT", "recFeedback": "Send a talent pipeline email but mention specific that her experience is great but since this is a new role we cant accomodate the supervise hours, we wanted to put you in our pipeline", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Nataniel Shalomayev", "position": "Physician Assistant", "status": "Screening", "prescreen": "Monday, June 22⋅1:00 – 1:20pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Astoria, Jamaica, Long Island", "emp": "FT", "recFeedback": "Nathaniel Shalomayev, a new graduate PA, has applied to our New Grad posting. He is seeking a full-time position in Astoria, Jamaica, or Long Island. While his New York license is currently in process and expected within two weeks, he mentioned that he can obtain a temporary license in the meantime. I will schedule him for an initial interview.", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Joy Arana", "position": "Social worker", "status": "Screening", "prescreen": "Monday, June 22⋅1:35 – 1:55pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "Remote", "emp": "FT", "recFeedback": "Joy Arana, LCSW, applied for the remote position that Ari mentioned opening. She cannot work onsite because she is based in Plattsburgh. She has experience in SUD and in supervising LMSWs who need clinical hours for licensure. Since she is applying for this remote role and holds an LCSW", "mikeComment": "", "pritiFeedback": "", "reason": ""}, {"name": "Joseph Hafisov", "position": "Physician Assistant", "status": "Screening", "prescreen": "Monday, June 22⋅2:45 – 3:05pm", "initial": "", "final": "", "offerSent": "", "offerAccepted": "", "location": "", "emp": "", "recFeedback": "", "mikeComment": "", "pritiFeedback": "", "reason": ""}];
+
+const SUPABASE_URL=window.PIPELINE_CONFIG?.supabaseUrl||'';
+const SUPABASE_ANON_KEY=window.PIPELINE_CONFIG?.supabaseAnonKey||'';
+const DB_CONFIGURED=SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes('%SUPABASE_URL%') && !SUPABASE_ANON_KEY.includes('%SUPABASE_ANON_KEY%');
+const sb=DB_CONFIGURED && window.supabase ? window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY) : null;
+const DEFAULT_SETTINGS={
+  thPre:4, thInit:3, thFinal:2, thOffer:5,
+  enPre:true, enInit:true, enFinal:true, enOffer:true, enReject:true,
+  refDate:'' /* '' = use today */
+};
+const STATUS_OPTIONS=[
+  'Screening','Initial w/ Mike','Schedule for Final','Final Interview',
+  'Done with Final interview Waitlist for offer','Offer Sent','Offer Accepted',
+  'Talent Pipeline','Hold off','Reject','Declined','Withdraw','No Show','Not Responsive'
+];
+
+/* ---------- date helpers ---------- */
+const MONTHS={january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11,
+  jan:0,feb:1,mar:2,apr:3,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
+function pad(n){return String(n).padStart(2,'0');}
+function toISO(d){return d?`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`:'';}
+function fromISO(s){if(!s)return null;const m=String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);return m?new Date(+m[1],(+m[2])-1,+m[3]):null;}
+/* parse a messy stage cell ("Thursday, June 4⋅3:30 – 4:00pm", "May 18, Mon ...", ISO) into ISO yyyy-mm-dd */
+function parseStageISO(v, baseYear){
+  if(v==null||v==='')return '';
+  const s=String(v).trim();
+  let m=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/); if(m)return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if(m){let y=+m[3];if(y<100)y+=2000;return `${y}-${pad(+m[1])}-${pad(+m[2])}`;}
+  const re=/([A-Za-z]{3,9})\s+(\d{1,2})/g; let mm;
+  while((mm=re.exec(s))!==null){
+    const mo=MONTHS[mm[1].toLowerCase()];
+    if(mo!=null){
+      let y=baseYear, d=new Date(y,mo,+mm[2]);
+      // roll back if it lands far in the future relative to base
+      const base=new Date(baseYear,0,1);
+      if((d-base)/86400000>400) y-=1;
+      return `${y}-${pad(mo+1)}-${pad(+mm[2])}`;
+    }
+  }
+  return '';
+}
+function daysBetween(aISO,bDate){const a=fromISO(aISO);if(!a)return null;return Math.round((bDate-a)/86400000);}
+function fmtShort(iso){const d=fromISO(iso);if(!d)return '';return d.toLocaleString('en-US',{month:'short',day:'numeric'});}
+function fmtLong(iso){const d=fromISO(iso);if(!d)return '';return d.toLocaleString('en-US',{weekday:'short',month:'long',day:'numeric',year:'numeric'});}
+function firstName(n){return (n||'').trim().split(/\s+/)[0]||'there';}
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ---------- state ---------- */
+let CAND=[]; let SET={...DEFAULT_SETTINGS}; let editingId=null; let activeFilter='action'; let sortMode='priority'; let roleFilter=null; let reasonFilter=null; let expandedNotes=new Set(); let allNotesOpen=false; let deleteArmed=false; let deleteArmTimer=null; let IS_EDITOR=false; let CURRENT_USER=null; let realtimeChannel=null;
+
+function uid(){return crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-4000-8000-'+Math.random().toString(16).slice(2,14).padEnd(12,'0');}
+function refDateObj(){
+  const d=SET.refDate?fromISO(SET.refDate):new Date();
+  return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+}
+function baseYear(){return refDateObj().getFullYear();}
+
+/* ---------- seed / Supabase persistence ---------- */
+function buildFromSeed(){
+  const by=new Date().getFullYear();
+  return SEED.map(r=>({
+    id:uid(), name:(r.name||'').trim(), role:(r.position||'').trim()||'Unspecified',
+    location:(r.location||'').trim(), emp:(r.emp||'').trim(), status:(r.status||'').trim(),
+    pre:parseStageISO(r.prescreen,by), init:parseStageISO(r.initial,by),
+    fin:parseStageISO(r.final,by), oSent:parseStageISO(r.offerSent,by), oAcc:parseStageISO(r.offerAccepted,by),
+    recFeedback:(r.recFeedback||'').trim(), mikeComment:(r.mikeComment||'').trim(),
+    pritiFeedback:(r.pritiFeedback||'').trim(), reason:(r.reason||'').trim(), emailSent:false
+  }));
+}
+function dbCandidate(c){
+  return {id:c.id,name:c.name||'',role:c.role||'Unspecified',location:c.location||'',emp:c.emp||'',status:c.status||'',
+    pre:c.pre||'',init:c.init||'',fin:c.fin||'',oSent:c.oSent||'',oAcc:c.oAcc||'',recFeedback:c.recFeedback||'',
+    mikeComment:c.mikeComment||'',pritiFeedback:c.pritiFeedback||'',reason:c.reason||'',emailSent:!!c.emailSent};
+}
+function dbSettings(){return {id:true,thPre:SET.thPre,thInit:SET.thInit,thFinal:SET.thFinal,thOffer:SET.thOffer,enPre:!!SET.enPre,enInit:!!SET.enInit,enFinal:!!SET.enFinal,enOffer:!!SET.enOffer,enReject:!!SET.enReject,refDate:SET.refDate||''};}
+function applyReadonlyState(){
+  document.body.classList.toggle('readonly',!IS_EDITOR);
+  const auth=document.getElementById('authStatus'), btn=document.getElementById('loginBtn'), note=document.getElementById('authNotice');
+  if(auth)auth.textContent=IS_EDITOR ? (CURRENT_USER?.email||'Editor') : 'View-only';
+  if(btn)btn.textContent=IS_EDITOR?'Log out':'Log in';
+  if(note)note.style.display=IS_EDITOR?'none':'block';
+}
+async function load(){
+  if(!sb){
+    CAND=[]; SET={...DEFAULT_SETTINGS}; applyReadonlyState();
+    document.getElementById('parseNotice').innerHTML='<div class="notice err"><strong>Supabase is not configured.</strong> Add SUPABASE_URL and SUPABASE_ANON_KEY in Cloudflare Pages, then redeploy.</div>';
+    return;
+  }
+  const {data:{session}}=await sb.auth.getSession();
+  CURRENT_USER=session?.user||null; IS_EDITOR=!!CURRENT_USER; applyReadonlyState();
+  const [{data:settings,error:sErr},{data:candidates,error:cErr}]=await Promise.all([
+    sb.from('app_settings').select('*').eq('id',true).maybeSingle(),
+    sb.from('candidates').select('*').order('updated_at',{ascending:false})
+  ]);
+  if(sErr)throw sErr; if(cErr)throw cErr;
+  SET={...DEFAULT_SETTINGS,...(settings||{})};
+  CAND=(candidates||[]).map(c=>({...c,emailSent:!!c.emailSent}));
+}
+async function saveS(){
+  if(!IS_EDITOR||!sb){toast('Log in to change flag rules.');return false;}
+  const {error}=await sb.from('app_settings').upsert(dbSettings(),{onConflict:'id'});
+  if(error){toast('Settings were rejected by Supabase: '+error.message);return false;}
+  return true;
+}
+async function logChange(action,c,field='',oldValue='',newValue=''){
+  if(!IS_EDITOR||!sb)return;
+  await sb.from('change_log').insert({actor_email:CURRENT_USER?.email||'',action,candidate_id:c?.id||null,candidate_name:c?.name||'',field,old_value:String(oldValue??''),new_value:String(newValue??'')});
+}
+async function saveCandidate(c,action='edit',before=null){
+  if(!IS_EDITOR||!sb){toast('Log in to edit candidates.');return false;}
+  const {data,error}=await sb.from('candidates').upsert(dbCandidate(c),{onConflict:'id'}).select().single();
+  if(error){toast('Supabase rejected the save: '+error.message);return false;}
+  Object.assign(c,data);
+  if(action==='add') await logChange('add',c,'','','created');
+  else if(before){
+    for(const k of ['name','role','location','emp','status','pre','init','fin','oSent','oAcc','recFeedback','mikeComment','pritiFeedback','reason','emailSent']){
+      if(String(before[k]??'')!==String(c[k]??'')) await logChange('edit',c,k,before[k],c[k]);
+    }
+  }
+  return true;
+}
+async function deleteCandidateRecord(c){
+  if(!IS_EDITOR||!sb){toast('Log in to delete candidates.');return false;}
+  const {error}=await sb.from('candidates').delete().eq('id',c.id);
+  if(error){toast('Supabase rejected the delete: '+error.message);return false;}
+  await logChange('delete',c,'','','deleted');
+  return true;
+}
+async function replaceCandidates(out){
+  if(!IS_EDITOR||!sb){toast('Log in to import candidates.');return false;}
+  const {error:delErr}=await sb.from('candidates').delete().neq('id','00000000-0000-0000-0000-000000000000');
+  if(delErr){toast('Could not clear existing rows: '+delErr.message);return false;}
+  const {error:insErr}=await sb.from('candidates').insert(out.map(dbCandidate));
+  if(insErr){toast('Could not import rows: '+insErr.message);return false;}
+  await logChange('add',{id:null,name:'Bulk import'},'candidates','',out.length+' rows');
+  return true;
+}
+function subscribeRealtime(){
+  if(!sb||realtimeChannel)return;
+  realtimeChannel=sb.channel('pipeline-db').on('postgres_changes',{event:'*',schema:'public',table:'candidates'},async()=>{await load(); fillStaticLists(); renderSettings(); render();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'app_settings'},async()=>{await load(); renderSettings(); render();}).subscribe();
+}
+
+/* ---------- classification ---------- */
+function outcomeOf(c){
+  const s=(c.status||'').toLowerCase();
+  if(c.oAcc || /offer accepted|hired/.test(s)) return 'hired';
+  if(/reject/.test(s)) return 'rejected';
+  if(/declin|withdraw|no show|no-show|not responsive|unresponsive/.test(s)) return 'withdrew';
+  if(/talent pipeline|hold/.test(s)) return 'parked';
+  return 'active';
+}
+function stageBadge(c){
+  const o=outcomeOf(c); const s=(c.status||'').toLowerCase();
+  if(o==='hired')return {cls:'b-hired',txt:'Offer accepted'};
+  if(o==='rejected')return {cls:'b-rej',txt:'Rejected'};
+  if(o==='withdrew')return {cls:'b-wd',txt:c.status||'Closed'};
+  if(o==='parked')return {cls:'b-pool',txt:/hold/.test(s)?'Hold off':'Talent pool'};
+  if(/offer sent/.test(s)||c.oSent)return {cls:'b-offer',txt:'Offer sent'};
+  if(/final|waitlist/.test(s))return {cls:'b-final',txt:'Final stage'};
+  if(/initial|mike/.test(s))return {cls:'b-init',txt:'Initial interview'};
+  if(/screen/.test(s))return {cls:'b-screen',txt:'Screening'};
+  return {cls:'b-screen',txt:c.status||'Active'};
+}
+/* returns the active flag for a candidate (or null), plus upcoming info */
+function evaluate(c){
+  const D=refDateObj();
+  const o=outcomeOf(c);
+  const past=iso=>{const d=fromISO(iso);return d&&d<=D;};
+  const future=iso=>{const d=fromISO(iso);return d&&d>D;};
+  const result={outcome:o, flag:null, upcoming:null, rejectEmail:false};
+
+  if(o==='rejected'){ result.rejectEmail=!c.emailSent && SET.enReject; }
+
+  // upcoming scheduled interview (informational)
+  for(const k of ['init','fin','oSent']){
+    if(future(c[k])){ result.upcoming={key:k,iso:c[k]}; break; }
+  }
+
+  if(o!=='active'){ return result; }
+
+  // OFFER outstanding: offer sent (date or status) and not accepted
+  const offerSentSig = past(c.oSent) || /offer sent/.test((c.status||'').toLowerCase());
+  if(SET.enOffer && offerSentSig && !c.oAcc){
+    const baseISO = past(c.oSent)? c.oSent : (past(c.fin)? c.fin : '');
+    const dd = baseISO? daysBetween(baseISO,D) : null;
+    if(dd!=null && dd>=SET.thOffer){
+      result.flag={type:'offer', days:dd, baseISO,
+        line:`Offer ${past(c.oSent)?`sent ${fmtShort(c.oSent)}`:'marked sent'}. <span class="days {U}">${dd} days</span> with no response. Time to follow up.`};
+      return result;
+    }
+  }
+  // FINAL done, no offer
+  if(SET.enFinal && past(c.fin) && !c.oSent && !/offer sent/.test((c.status||'').toLowerCase())){
+    const dd=daysBetween(c.fin,D);
+    if(dd!=null && dd>=SET.thFinal){
+      result.flag={type:'final', days:dd, baseISO:c.fin,
+        line:`Final interview ${fmtShort(c.fin)}. <span class="days {U}">${dd} days</span> with no offer decision. Needs the hiring manager's call.`};
+      return result;
+    }
+  }
+  // INITIAL done, no final
+  if(SET.enInit && past(c.init) && !c.fin){
+    const dd=daysBetween(c.init,D);
+    if(dd!=null && dd>=SET.thInit){
+      result.flag={type:'initial', days:dd, baseISO:c.init,
+        line:`Interviewed ${fmtShort(c.init)}. <span class="days {U}">${dd} days</span> with no move to final. Needs hiring manager feedback.`};
+      return result;
+    }
+  }
+  // PRE-SCREEN done, no initial booked
+  if(SET.enPre && past(c.pre) && !c.init){
+    const dd=daysBetween(c.pre,D);
+    if(dd!=null && dd>=SET.thPre){
+      result.flag={type:'prescreen', days:dd, baseISO:c.pre,
+        line:`Pre-screened ${fmtShort(c.pre)}. <span class="days {U}">${dd} days</span> and initial interview not booked yet.`};
+      return result;
+    }
+  }
+  return result;
+}
+function urgencyClass(type,days){
+  const t={prescreen:SET.thPre,initial:SET.thInit,final:SET.thFinal,offer:SET.thOffer}[type]||1;
+  if(days>=t*2) return 'urgent';
+  if(days>=t+Math.ceil(t/2)) return 'mid';
+  return '';
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render(){
+  // sync ref date control
+  const rd=document.getElementById('refDate'); const ref=refDateObj();
+  rd.value=toISO(ref);
+  document.getElementById('refWeekday').textContent=ref.toLocaleString('en-US',{weekday:'long'})+(SET.refDate?'':' · today');
+
+  // evaluate all
+  const ev=CAND.map(c=>({c,e:evaluate(c)}));
+  const flagged=ev.filter(x=>x.e.flag);
+  const rejectQueue=ev.filter(x=>x.e.rejectEmail);
+  const isFriday=ref.getDay()===5;
+
+  renderFriday(rejectQueue,isFriday);
+  renderSummary(ev,flagged,rejectQueue);
+  renderActionCenter(flagged,rejectQueue);
+  renderContext(ev);
+  renderFilters(ev);
+  renderTable(ev);
+}
+
+function renderFriday(rejectQueue,isFriday){
+  const el=document.getElementById('fridayBanner');
+  if(!rejectQueue.length){ el.innerHTML=''; return; }
+  const n=rejectQueue.length;
+  if(isFriday){
+    el.innerHTML=`<div class="friday hot"><span class="fi">📨</span><div class="grow">It is Friday. <b>${n} rejection email${n!==1?'s':''}</b> are queued to send this week. Scroll to the rejection group below to copy the note and mark each one sent.</div></div>`;
+  }else{
+    el.innerHTML=`<div class="friday warm"><span class="fi">🗓️</span><div class="grow"><b>${n} rejection email${n!==1?'s':''}</b> queued for the Friday batch. They will be highlighted here every Friday until you mark them sent.</div></div>`;
+  }
+}
+
+function renderSummary(ev,flagged,rejectQueue){
+  const active=ev.filter(x=>x.e.outcome==='active').length;
+  const parked=ev.filter(x=>x.e.outcome==='parked').length;
+  const hired=ev.filter(x=>x.e.outcome==='hired').length;
+  const offersOut=ev.filter(x=>x.e.flag&&x.e.flag.type==='offer').length;
+  const finalWait=ev.filter(x=>x.e.flag&&x.e.flag.type==='final').length;
+  document.getElementById('summary').innerHTML=`
+    <div class="stat action"><div class="n">${flagged.length}</div><div class="l">Need a next step</div></div>
+    <div class="stat blue"><div class="n">${active}</div><div class="l">Active in pipeline</div></div>
+    <div class="stat flag"><div class="n">${offersOut}</div><div class="l">Offers awaiting reply</div></div>
+    <div class="stat"><div class="n">${finalWait}</div><div class="l">Final stage, no decision</div></div>
+    <div class="stat zero"><div class="n">${rejectQueue.length}</div><div class="l">Rejection emails to send</div></div>
+    <div class="stat good"><div class="n">${hired}</div><div class="l">Offers accepted</div></div>`;
+}
+
+const GROUPS=[
+  {type:'offer', cls:'g-offer', ic:'💸', title:'Offers out, no response yet', sub:'Sent and waiting. Follow up or escalate.'},
+  {type:'final', cls:'g-final', ic:'⚖️', title:'Final interview done, needs a decision', sub:'Waiting on the hiring manager to say yes, no, or send an offer.'},
+  {type:'initial', cls:'g-init', ic:'⏳', title:'Interviewed, waiting to move to final', sub:'Initial round happened, no final booked. Nudge for feedback.'},
+  {type:'prescreen', cls:'g-pre', ic:'📞', title:'Pre-screened, initial not booked', sub:'Schedule the initial interview before they cool off.'}
+];
+
+function renderActionCenter(flagged,rejectQueue){
+  const wrap=document.getElementById('actionCenter');
+  const totalActions=flagged.length+rejectQueue.length;
+  document.getElementById('actionCount').textContent = totalActions? `${totalActions} open` : '';
+
+  let html='';
+  GROUPS.forEach(g=>{
+    const rows=flagged.filter(x=>x.e.flag.type===g.type)
+      .sort((a,b)=>b.e.flag.days-a.e.flag.days);
+    if(!rows.length) return;
+    html+=`<div class="agroup ${g.cls}">
+      <div class="agroup-head"><div class="ic">${g.ic}</div>
+        <div><h3>${g.title}</h3><div class="meta">${esc(g.sub)}</div></div>
+        <div class="pill">${rows.length}</div></div>`;
+    let inner='';
+    rows.forEach(({c,e})=>{
+      const U=urgencyClass(e.flag.type,e.flag.days);
+      const line=e.flag.line.replace('{U}',U);
+      inner+=`<div class="arow">
+        <div class="who"><div class="nm">${esc(c.name)}</div><div class="ro">${esc(c.role)}${c.location?' · '+esc(c.location):''}</div></div>
+        <div class="why">${line}</div>
+        <div class="act">${quickActions(c,e.flag.type)}</div>
+      </div>`;
+    });
+    html+=`<div class="arows${rows.length>15?' scroll':''}">${inner}</div>`;
+    html+=`</div>`;
+  });
+
+  // rejection group
+  if(rejectQueue.length){
+    html+=renderRejectGroup(rejectQueue);
+  }
+
+  if(!html){
+    html=`<div class="allclear"><span style="font-size:22px">✅</span><div><div class="big">Nothing is stuck right now.</div>Every active candidate has a future step booked or was touched within your thresholds. New flags appear here automatically as time passes.</div></div>`;
+  }
+  wrap.innerHTML=html;
+}
+
+function quickActions(c,type){
+  if(!IS_EDITOR)return '';
+  const id=c.id;
+  let qa='';
+  if(type==='prescreen') qa=`<button class="btn tiny" onclick="advance('${id}','init')">Booked initial</button>`;
+  else if(type==='initial') qa=`<button class="btn tiny" onclick="advance('${id}','fin')">Moved to final</button>`;
+  else if(type==='final') qa=`<button class="btn tiny" onclick="advance('${id}','oSent')">Offer sent</button>`;
+  else if(type==='offer') qa=`<button class="btn tiny" onclick="advance('${id}','oAcc')">Accepted</button>`;
+  return qa+`<button class="btn tiny ghost" onclick="openEdit('${id}')">Update</button>`;
+}
+
+function renderRejectGroup(rejectQueue){
+  let rows='';
+  rejectQueue.forEach(({c})=>{
+    rows+=`<div class="arow">
+      <div class="who"><div class="nm">${esc(c.name)}</div><div class="ro">${esc(c.role)}${c.location?' · '+esc(c.location):''}</div></div>
+      <div class="why">Marked <b>Reject</b>${c.reason?` · ${esc(c.reason)}`:''}. Send a courtesy rejection note.</div>
+      <div class="act">${IS_EDITOR?`<button class="btn tiny" onclick="markEmail('${c.id}',true)">Mark email sent</button><button class="btn tiny ghost" onclick="copyRejectFor('${c.id}',this)">Copy email</button>`:''}</div>
+    </div>`;
+  });
+  const genericId='generic-reject';
+  return `<div class="agroup g-reject">
+    <div class="agroup-head"><div class="ic">📨</div>
+      <div><h3>Rejection emails to send</h3><div class="meta">Your Friday batch. Mark each one sent so it drops off the list.</div></div>
+      <div class="pill">${rejectQueue.length}</div></div>
+    <div class="arows${rejectQueue.length>15?' scroll':''}">${rows}</div>
+    <div class="mailbox">
+      <div class="mail-toggle" onclick="toggleMail(this)">▸ Show the rejection email template</div>
+      <div class="mail-body">
+        <div class="subjline"><b>Subject:</b> Update on your application with Nao Medical
+          <button class="btn tiny ghost" onclick="copySubject(this,'Update on your application with Nao Medical')">Copy subject</button></div>
+        <div class="email-preview" id="${genericId}">${rejectEmailHTML(null)}</div>
+        <div class="copy-row">
+          <button class="btn" onclick="copyRich('${genericId}',this)">Copy template</button>
+          <span class="copied" id="${genericId}-c">Copied, paste into Gmail</span>
+          <span style="font-size:12px;color:var(--muted)">Replace the brackets, then add your name in the sign-off.</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function rejectEmailHTML(c){
+  const fn = c? esc(firstName(c.name)) : '[First name]';
+  const role = c? esc(c.role) : '[role]';
+  return `<p>Hi ${fn},</p>`+
+    `<p>Thank you for taking the time to interview with us for the ${role} position at Nao Medical. We appreciate the chance to learn about your background and experience.</p>`+
+    `<p>After careful review, we have decided to move forward with other candidates whose experience lines up more closely with what this role needs right now. This was a competitive process and the decision was not an easy one.</p>`+
+    `<p>We would be glad to keep your details on file and reach out if a role that fits comes up. We wish you the very best in your search.</p>`+
+    `<p>Warm regards,<br>[Your name]<br>[Your title]<br>Nao Medical</p>`;
+}
+
+function renderContext(ev){
+  // compact funnel for situational awareness
+  const stages=[['Pre-screen','pre'],['Initial','init'],['Final','fin'],['Offer sent','oSent'],['Accepted','oAcc']];
+  const reached=stages.map(()=>0);
+  ev.forEach(({c})=>{
+    let f=-1;
+    if(c.pre)f=Math.max(f,0); if(c.init)f=Math.max(f,1); if(c.fin)f=Math.max(f,2);
+    if(c.oSent||/offer sent/.test((c.status||'').toLowerCase()))f=Math.max(f,3);
+    if(c.oAcc||/offer accepted/.test((c.status||'').toLowerCase()))f=Math.max(f,4);
+    for(let i=0;i<=f;i++)reached[i]++;
+  });
+  const max=reached[0]||1;
+  let f='<div class="funnel">';
+  stages.forEach((s,i)=>{
+    const w=Math.max(6,Math.round(reached[i]/max*100));
+    const conv = i===0? `${Math.round(reached[i]/CAND.length*100||0)}% of all`
+      : `<b>${reached[i-1]?Math.round(reached[i]/reached[i-1]*100):0}%</b> advance`;
+    f+=`<div class="fstage"><div class="lab">${s[0]}</div><div class="track"><div class="fill" style="width:${w}%">${reached[i]}</div></div><div class="conv">${conv}</div></div>`;
+  });
+  f+='</div>';
+
+  // ----- candidates by role (the open jobs) -----
+  const roleMap={}, roleActive={};
+  ev.forEach(({c,e})=>{
+    const r=c.role||'Unspecified';
+    roleMap[r]=(roleMap[r]||0)+1;
+    if(e.outcome==='active'||e.upcoming) roleActive[r]=(roleActive[r]||0)+1;
+  });
+  const roles=Object.entries(roleMap).map(([k,v])=>({k,v,active:roleActive[k]||0})).sort((a,b)=>b.v-a.v||a.k.localeCompare(b.k));
+  const rmax=roles.reduce((m,r)=>Math.max(m,r.v),1);
+  let rl='<div class="rolelist">';
+  roles.forEach(r=>{
+    const w=Math.max(4,Math.round(r.v/rmax*100));
+    const sel=roleFilter===r.k?' sel':'';
+    rl+=`<div class="rolebar${sel}" onclick="setRoleFilter('${esc(r.k).replace(/'/g,"\\'")}')" title="Show ${esc(r.k)} candidates in the table">
+      <div class="rlab"><span class="dot"></span><span class="nm2">${esc(r.k)}</span></div>
+      <div class="rtrack"><div class="rfill" style="width:${w}%"></div></div>
+      <div class="rval">${r.v}</div>
+      <div class="ract">${r.active} active</div>
+    </div>`;
+  });
+  rl+='</div><div class="rolehint">Click a role to filter the candidate table below. Click it again to clear.</div>';
+
+  // ----- why candidates fall out (reasons for reject / decline) -----
+  const rejected=ev.filter(x=>x.e.outcome==='rejected').map(x=>x.c);
+  const withdrew=ev.filter(x=>x.e.outcome==='withdrew').map(x=>x.c);
+  const reasonsPanel=
+    `<div class="panel"><h2>Why candidates fall out</h2>
+      <div class="ph">The reason captured for everyone we passed on, and for candidates who declined or withdrew.</div>
+      <div class="reasons-grid">
+        <div><div class="reasons-sub">Why we passed <span>· ${rejected.length} rejected</span></div>${reasonBars(rejected,'rejected')}</div>
+        <div><div class="reasons-sub">Why candidates declined or withdrew <span>· ${withdrew.length}</span></div>${reasonBars(withdrew,'withdrew')}</div>
+      </div>
+      <div class="rolehint">Click a reason to see exactly which candidates it covers in the table below. Click it again to clear.</div>
+    </div>`;
+
+  document.getElementById('contextPanels').innerHTML=
+    `<div class="grid2">
+      <div class="panel"><h2>Where the pipeline stands</h2><div class="ph">How many of your ${CAND.length} tracked candidates reached each stage.</div>${f}</div>
+      <div class="panel"><h2>Candidates by role</h2><div class="ph">Total candidates per open position, with how many are still active.</div>${rl}</div>
+    </div>`+reasonsPanel;
+}
+
+const REASON_COLORS={
+  'Accepted another offer':'#9c2d2d','Compensation':'#c98a2b','Qualifications not a fit':'#5a6b9c',
+  'Location / commute':'#2f9e8f','Unresponsive / no show':'#5d6b7d','Withdrew / not interested':'#7a8aa3',
+  'Other':'#9aa6b8','No reason noted':'#b9c4c0'
+};
+function lossBucket(c){
+  const r=(c.reason||'').toLowerCase(), s=(c.status||'').toLowerCase();
+  if(/different company|another (job|offer)|other offer|accepted (a|an|another|offer)|counter[- ]?offer/.test(r)) return 'Accepted another offer';
+  if(/\bcomp\b|compensation|\brate\b|salary|\bpay\b|wage|benefit/.test(r)) return 'Compensation';
+  if(/qualif|experience|not enough|licens|credential|not a fit|skill|background|years/.test(r)) return 'Qualifications not a fit';
+  if(/reloc|distance|commut|location|too far|travel/.test(r)) return 'Location / commute';
+  if(/no[- ]?show|not responsive|unresponsive|ghost|no response|never replied|stopped responding/.test(r) || /no show|not responsive/.test(s)) return 'Unresponsive / no show';
+  if(/not interested|declin|withdr|personal|family|other opportunit|stay(ing)? (at|with)/.test(r)) return 'Withdrew / not interested';
+  if(r) return 'Other';
+  if(/withdraw|declin/.test(s)) return 'Withdrew / not interested';
+  return 'No reason noted';
+}
+function reasonBars(group, groupKey){
+  if(!group.length) return '<div class="ph" style="margin:0">None recorded yet.</div>';
+  const map={};
+  group.forEach(c=>{const k=lossBucket(c); map[k]=(map[k]||0)+1;});
+  const arr=Object.entries(map).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v);
+  const max=arr.reduce((m,x)=>Math.max(m,x.v),1);
+  return '<div class="rslist">'+arr.map(x=>{
+    const w=Math.max(6,Math.round(x.v/max*100)); const col=REASON_COLORS[x.k]||'#9aa6b8';
+    const sel=(reasonFilter&&reasonFilter.group===groupKey&&reasonFilter.bucket===x.k)?' sel':'';
+    const safe=esc(x.k).replace(/'/g,"\\'");
+    return `<div class="rsbar${sel}" onclick="setReasonFilter('${safe}','${groupKey}')" title="Show these candidates in the table below">
+      <div class="rslab"><span class="rsdot" style="background:${col}"></span>${esc(x.k)}</div>
+      <div class="rstrack"><div class="rsfill" style="width:${w}%;background:${col}"></div></div>
+      <div class="rsval">${x.v}</div></div>`;
+  }).join('')+'</div>';
+}
+
+/* ---------- table ---------- */
+const FILTERS=[
+  {key:'action',label:'Needs action'},
+  {key:'active',label:'Active'},
+  {key:'screening',label:'Screening'},
+  {key:'upcoming',label:'Interview booked'},
+  {key:'final',label:'Final stage'},
+  {key:'hired',label:'Hired'},
+  {key:'rejected',label:'Rejected'},
+  {key:'closed',label:'Closed / withdrew'},
+  {key:'parked',label:'Talent pool'},
+  {key:'all',label:'Everyone'}
+];
+function isScreening(c,e){
+  if(e.outcome!=='active') return false;
+  if(/screen/.test((c.status||'').toLowerCase())) return true;
+  return !!(c.pre && !c.init && !c.fin && !c.oSent);
+}
+function isFinalStage(c,e){
+  if(e.outcome!=='active') return false;
+  const s=(c.status||'').toLowerCase();
+  if(c.oSent || c.oAcc || /offer/.test(s)) return false; // already at/after offer
+  return !!c.fin || /final|waitlist/.test(s);
+}
+function renderFilters(ev){
+  const counts={action:0,active:0,screening:0,upcoming:0,final:0,hired:0,rejected:0,closed:0,parked:0,all:ev.length};
+  ev.forEach(({c,e})=>{
+    if(e.flag||e.rejectEmail)counts.action++;
+    if(e.outcome==='active')counts.active++;
+    if(isScreening(c,e))counts.screening++;
+    if(e.upcoming)counts.upcoming++;
+    if(isFinalStage(c,e))counts.final++;
+    if(e.outcome==='hired')counts.hired++;
+    if(e.outcome==='rejected')counts.rejected++;
+    if(e.outcome==='withdrew')counts.closed++;
+    if(e.outcome==='parked')counts.parked++;
+  });
+  document.getElementById('filters').innerHTML=FILTERS.map(f=>
+    `<span class="chip-f ${activeFilter===f.key?'on':''}" onclick="setFilter('${f.key}')">${f.label} <b style="opacity:.6">${counts[f.key]}</b></span>`
+  ).join('');
+}
+function setFilter(k){activeFilter=k;render();}
+function setRoleFilter(role){
+  if(roleFilter===role){ roleFilter=null; }
+  else { roleFilter=role; reasonFilter=null; activeFilter='all'; }
+  render();
+}
+function clearRoleFilter(){ roleFilter=null; render(); }
+function setReasonFilter(bucket,group){
+  if(reasonFilter&&reasonFilter.bucket===bucket&&reasonFilter.group===group){ reasonFilter=null; }
+  else { reasonFilter={bucket,group}; roleFilter=null; activeFilter='all'; }
+  render();
+}
+function clearReasonFilter(){ reasonFilter=null; render(); }
+
+function matchFilter(e,c){
+  switch(activeFilter){
+    case 'action': return !!(e.flag||e.rejectEmail);
+    case 'active': return e.outcome==='active';
+    case 'screening': return isScreening(c,e);
+    case 'upcoming': return !!e.upcoming;
+    case 'final': return isFinalStage(c,e);
+    case 'hired': return e.outcome==='hired';
+    case 'rejected': return e.outcome==='rejected';
+    case 'closed': return e.outcome==='withdrew';
+    case 'parked': return e.outcome==='parked';
+    default: return true;
+  }
+}
+function hasFeedback(c){return !!((c.recFeedback||'').trim()||(c.mikeComment||'').trim()||(c.pritiFeedback||'').trim()||(c.reason||'').trim());}
+function feedbackHTML(c){
+  const item=(label,val)=> (val&&val.trim())?`<div class="fbk-item"><div class="fbk-label">${label}</div><div class="fbk-text">${esc(val)}</div></div>`:'';
+  const body=[
+    item('Recruiter notes',c.recFeedback),
+    item("Mike's comment",c.mikeComment),
+    item("Dr. Priti's feedback",c.pritiFeedback),
+    item('Reason declined / withdrawn',c.reason)
+  ].filter(Boolean).join('');
+  return body || '<div class="fbk-empty">No feedback recorded yet. Use Edit to add recruiter notes, Mike\'s comment, or Dr. Priti\'s feedback.</div>';
+}
+function toggleNotes(id){ if(expandedNotes.has(id))expandedNotes.delete(id); else expandedNotes.add(id); render(); }
+function toggleAllNotes(){ allNotesOpen=!allNotesOpen; expandedNotes.clear(); render(); }
+
+function renderTable(ev){
+  const q=(document.getElementById('search').value||'').toLowerCase().trim();
+  let rows=ev.filter(x=>matchFilter(x.e,x.c));
+  if(roleFilter) rows=rows.filter(({c})=>(c.role||'Unspecified')===roleFilter);
+  if(reasonFilter) rows=rows.filter(({c,e})=> e.outcome===reasonFilter.group && lossBucket(c)===reasonFilter.bucket);
+  if(q) rows=rows.filter(({c})=>(c.name+' '+c.role+' '+c.status+' '+c.location).toLowerCase().includes(q));
+  // sort
+  const byName=(a,b)=>a.c.name.localeCompare(b.c.name);
+  const priority=(a,b)=>{const fa=a.e.flag?a.e.flag.days:-1,fb=b.e.flag?b.e.flag.days:-1;return fa!==fb?fb-fa:byName(a,b);};
+  const sorters={
+    priority, az:byName, za:(a,b)=>byName(b,a),
+    days:(a,b)=>{const fa=a.e.flag?a.e.flag.days:-1,fb=b.e.flag?b.e.flag.days:-1;return fa!==fb?fb-fa:byName(a,b);},
+    role:(a,b)=>(a.c.role||'').localeCompare(b.c.role||'')||byName(a,b)
+  };
+  rows.sort(sorters[sortMode]||priority);
+  document.getElementById('tableCount').textContent=`${rows.length} shown`;
+
+  const roleNote = roleFilter
+    ? `<div class="rolefilter-note">Showing <b>${esc(roleFilter)}</b> candidates only. <button class="btn tiny ghost" onclick="clearRoleFilter()">Show all roles</button></div>`
+    : '';
+  const reasonNote = reasonFilter
+    ? `<div class="rolefilter-note">Showing <b>${esc(reasonFilter.bucket)}</b> from candidates who ${reasonFilter.group==='rejected'?'we passed on':'declined or withdrew'}. <button class="btn tiny ghost" onclick="clearReasonFilter()">Clear</button></div>`
+    : '';
+  const notes = roleNote + reasonNote;
+
+  if(!rows.length){
+    document.getElementById('tableWrap').innerHTML=notes+'<div class="empty"><div class="big">No candidates here</div><div>Try another filter or clear the search.</div></div>';
+    return;
+  }
+  const scroll = rows.length>15;
+  const anyFb = rows.some(({c})=>hasFeedback(c));
+  const tools = anyFb ? `<div class="tabletools"><button class="btn tiny ghost" onclick="toggleAllNotes()">${allNotesOpen?'▾ Collapse all feedback':'▸ Expand all feedback'}</button><span class="toolnote">Click "Notes" on any row to read that candidate's feedback.</span></div>` : '';
+  let html=notes+tools+`<div class="tbl-scroll${scroll?' vscroll':''}">`+
+    (scroll?`<div class="scrollnote">Showing all ${rows.length}. Scroll inside the table; the header stays put.</div>`:'')+
+    '<table class="cand"><thead><tr>'+
+    '<th>Candidate</th><th>Status</th><th>Pre-screen</th><th>Initial</th><th>Final</th><th>Offer</th><th>Flag</th><th>Notes</th><th></th>'+
+    '</tr></thead><tbody>';
+  rows.forEach(({c,e})=>{
+    const b=stageBadge(c);
+    const dcell=(iso,up)=>{
+      if(!iso)return '<span class="dt none">—</span>';
+      const isUp = up && e.upcoming && e.upcoming.iso===iso;
+      return `<span class="dt"${isUp?' style="color:var(--blue-ink);font-weight:600"':''} title="${esc(fmtLong(iso))}">${esc(fmtShort(iso))}${isUp?' ↗':''}</span>`;
+    };
+    let flag='<span class="fd-none">—</span>';
+    if(e.flag){const U=urgencyClass(e.flag.type,e.flag.days);
+      const lbl={offer:'Offer waiting',final:'Final pending',initial:'Needs feedback',prescreen:'Book initial'}[e.flag.type];
+      flag=`<span class="flagdot fd-${U==='urgent'?'urgent':U==='mid'?'mid':'ok'}"><span class="d"></span>${lbl} · ${e.flag.days}d</span>`;
+    } else if(e.rejectEmail){ flag=`<span class="flagdot fd-urgent"><span class="d"></span>Send rejection</span>`; }
+    else if(e.upcoming){ const lbl={init:'Initial',fin:'Final',oSent:'Offer'}[e.upcoming.key];
+      flag=`<span class="flagdot fd-ok" style="color:var(--blue-ink)"><span class="d" style="background:var(--blue-ink)"></span>${lbl} ${fmtShort(e.upcoming.iso)}</span>`; }
+    const fb=hasFeedback(c);
+    const open=allNotesOpen||expandedNotes.has(c.id);
+    const notesBtn=`<button class="btn tiny ghost notesbtn" onclick="toggleNotes('${c.id}')">${open?'Hide':'Notes'}${fb?'<span class="fbdot" title="Has feedback"></span>':''}</button>`;
+    html+=`<tr onclick="openEdit('${c.id}')">
+      <td><div class="nm">${esc(c.name)}</div><div class="ro">${esc(c.role)}${c.location?' · '+esc(c.location):''}</div></td>
+      <td><span class="badge ${b.cls}">${esc(b.txt)}</span></td>
+      <td>${dcell(c.pre)}</td><td>${dcell(c.init,true)}</td><td>${dcell(c.fin,true)}</td>
+      <td>${c.oAcc?`<span class="dt" title="Accepted ${esc(fmtLong(c.oAcc))}">${esc(fmtShort(c.oAcc))} ✓</span>`:dcell(c.oSent,true)}</td>
+      <td>${flag}</td>
+      <td onclick="event.stopPropagation()">${notesBtn}</td>
+      <td onclick="event.stopPropagation()"><div class="rowact">${IS_EDITOR?`<button class="btn tiny ghost" onclick="openEdit('${c.id}')">Edit</button>`:''}</div></td>
+    </tr>`;
+    if(open){
+      html+=`<tr class="fbk-row"><td colspan="9"><div class="fbk-wrap">${feedbackHTML(c)}</div></td></tr>`;
+    }
+  });
+  html+='</tbody></table></div>';
+  document.getElementById('tableWrap').innerHTML=html;
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+async function advance(id,field){
+  if(!IS_EDITOR){toast('Log in to run quick actions.');return;}
+  const c=CAND.find(x=>x.id===id); if(!c)return;
+  const today=toISO(refDateObj());
+  const before={...c};
+  c[field]=today;
+  if(field==='init')c.status='Initial w/ Mike';
+  if(field==='fin')c.status='Final Interview';
+  if(field==='oSent')c.status='Offer Sent';
+  if(field==='oAcc')c.status='Offer Accepted';
+  if(await saveCandidate(c,'edit',before)){ render(); toast(`${firstName(c.name)} updated. Edit the record if the real date differs.`); }
+}
+async function markEmail(id,val){
+  if(!IS_EDITOR){toast('Log in to run quick actions.');return;}
+  const c=CAND.find(x=>x.id===id); if(!c)return;
+  const before={...c}; c.emailSent=val;
+  if(await saveCandidate(c,'edit',before)){ render(); toast(val?`Rejection email marked sent for ${firstName(c.name)}.`:'Reopened.'); }
+}
+
+/* ---------- modal ---------- */
+function openAdd(){
+  if(!IS_EDITOR){toast('Log in to add candidates.');return;}
+  editingId=null;
+  document.getElementById('modalTitle').textContent='Add candidate';
+  document.getElementById('modalDelete').style.display='none';
+  resetDeleteBtn();
+  setForm({status:'Screening'});
+  showModal();
+}
+function openEdit(id){
+  if(!IS_EDITOR){toast('Public link is view-only. Log in to edit.');return;}
+  const c=CAND.find(x=>x.id===id); if(!c)return;
+  editingId=id;
+  document.getElementById('modalTitle').textContent='Edit candidate';
+  document.getElementById('modalDelete').style.display='inline-block';
+  resetDeleteBtn();
+  setForm(c);
+  showModal();
+}
+function setForm(c){
+  const g=id=>document.getElementById(id);
+  g('f_name').value=c.name||''; g('f_role').value=c.role||''; g('f_location').value=c.location||'';
+  g('f_emp').value=c.emp||''; g('f_status').value=c.status||'Screening';
+  g('f_pre').value=c.pre||''; g('f_init').value=c.init||''; g('f_fin').value=c.fin||'';
+  g('f_oSent').value=c.oSent||''; g('f_oAcc').value=c.oAcc||'';
+  g('f_recFeedback').value=c.recFeedback||''; g('f_mikeComment').value=c.mikeComment||'';
+  g('f_pritiFeedback').value=c.pritiFeedback||''; g('f_reason').value=c.reason||'';
+}
+function readForm(){
+  const g=id=>document.getElementById(id).value.trim();
+  return {name:g('f_name'),role:g('f_role')||'Unspecified',location:g('f_location'),emp:g('f_emp'),
+    status:g('f_status'),pre:g('f_pre'),init:g('f_init'),fin:g('f_fin'),oSent:g('f_oSent'),oAcc:g('f_oAcc'),
+    recFeedback:g('f_recFeedback'),mikeComment:g('f_mikeComment'),pritiFeedback:g('f_pritiFeedback'),reason:g('f_reason')};
+}
+async function saveModal(){
+  if(!IS_EDITOR){toast('Log in to save candidates.');return;}
+  const data=readForm();
+  if(!data.name){toast('Add a candidate name first.');document.getElementById('f_name').focus();return;}
+  if(editingId){
+    const c=CAND.find(x=>x.id===editingId); const before={...c};
+    Object.assign(c,data);
+    if(await saveCandidate(c,'edit',before)){ hideModal(); render(); toast('Candidate updated.'); }
+  }else{
+    const c={id:uid(),emailSent:false,...data};
+    if(await saveCandidate(c,'add')){ CAND.unshift(c); hideModal(); fillStaticLists(); render(); toast('Candidate added.'); }
+  }
+}
+function resetDeleteBtn(){
+  deleteArmed=false; clearTimeout(deleteArmTimer);
+  const btn=document.getElementById('modalDelete');
+  if(btn){ btn.textContent='Delete'; btn.classList.remove('armed'); }
+}
+async function deleteCand(){
+  if(!IS_EDITOR){toast('Log in to delete candidates.');return;}
+  if(!editingId)return;
+  const btn=document.getElementById('modalDelete');
+  if(!deleteArmed){
+    deleteArmed=true;
+    if(btn){ btn.textContent='Click again to delete'; btn.classList.add('armed'); }
+    clearTimeout(deleteArmTimer);
+    deleteArmTimer=setTimeout(resetDeleteBtn,4000);
+    return;
+  }
+  clearTimeout(deleteArmTimer); deleteArmed=false;
+  const c=CAND.find(x=>x.id===editingId);
+  if(await deleteCandidateRecord(c)){ CAND=CAND.filter(x=>x.id!==editingId); hideModal(); render(); toast(`${c?c.name:'Candidate'} removed.`); }
+}
+function showModal(){document.getElementById('overlay').classList.add('open');}
+function hideModal(){document.getElementById('overlay').classList.remove('open');editingId=null;resetDeleteBtn();}
+
+/* ---------- settings ---------- */
+function renderSettings(){
+  const sw=(id,checked,label)=>`<label class="sw"><input type="checkbox" id="${id}" ${checked?'checked':''}><span class="sl"></span></label> ${label}`;
+  document.getElementById('settingsPanel').innerHTML=`
+    <div class="sh">Flag rules</div>
+    <div class="sbody">
+      <div class="sfield"><label>${sw('en_pre',SET.enPre,'Pre-screen to initial')}</label>
+        <div class="row"><span class="hintx">Flag after</span><input type="number" id="th_pre" min="0" value="${SET.thPre}"><span class="hintx">days with no initial booked</span></div></div>
+      <div class="sfield"><label>${sw('en_init',SET.enInit,'Initial to final')}</label>
+        <div class="row"><span class="hintx">Flag after</span><input type="number" id="th_init" min="0" value="${SET.thInit}"><span class="hintx">days with no final booked</span></div></div>
+      <div class="sfield"><label>${sw('en_final',SET.enFinal,'Final to offer')}</label>
+        <div class="row"><span class="hintx">Flag after</span><input type="number" id="th_final" min="0" value="${SET.thFinal}"><span class="hintx">days with no offer decision</span></div></div>
+      <div class="sfield"><label>${sw('en_offer',SET.enOffer,'Offer to acceptance')}</label>
+        <div class="row"><span class="hintx">Flag after</span><input type="number" id="th_offer" min="0" value="${SET.thOffer}"><span class="hintx">days with no reply</span></div></div>
+      <div class="sfield"><label>${sw('en_reject',SET.enReject,'Rejection email reminder')}</label>
+        <div class="hintx">Queues every Reject candidate for the weekly Friday batch until marked sent.</div></div>
+    </div>`;
+  const bind=(id,fn)=>{const el=document.getElementById(id);if(el)el.addEventListener('change',fn);};
+  bind('en_pre',e=>{SET.enPre=e.target.checked;saveS().then(ok=>{if(ok)render();});});
+  bind('en_init',e=>{SET.enInit=e.target.checked;saveS().then(ok=>{if(ok)render();});});
+  bind('en_final',e=>{SET.enFinal=e.target.checked;saveS().then(ok=>{if(ok)render();});});
+  bind('en_offer',e=>{SET.enOffer=e.target.checked;saveS().then(ok=>{if(ok)render();});});
+  bind('en_reject',e=>{SET.enReject=e.target.checked;saveS().then(ok=>{if(ok)render();});});
+  bind('th_pre',e=>{SET.thPre=+e.target.value||0;saveS().then(ok=>{if(ok)render();});});
+  bind('th_init',e=>{SET.thInit=+e.target.value||0;saveS().then(ok=>{if(ok)render();});});
+  bind('th_final',e=>{SET.thFinal=+e.target.value||0;saveS().then(ok=>{if(ok)render();});});
+  bind('th_offer',e=>{SET.thOffer=+e.target.value||0;saveS().then(ok=>{if(ok)render();});});
+}
+
+/* ---------- copy / clipboard ---------- */
+function copyRich(pid,btn){
+  const node=document.getElementById(pid);
+  const range=document.createRange(); range.selectNodeContents(node);
+  const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  try{document.execCommand('copy');}catch(e){}
+  sel.removeAllRanges();
+  const c=document.getElementById(pid+'-c'); if(c){c.classList.add('show');setTimeout(()=>c.classList.remove('show'),2000);}
+}
+function copySubject(btn,text){
+  const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+  document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}ta.remove();
+  const old=btn.textContent;btn.textContent='Copied ✓';setTimeout(()=>btn.textContent=old,1500);
+}
+function copyRejectFor(id,btn){
+  const c=CAND.find(x=>x.id===id); if(!c)return;
+  const holder=document.createElement('div'); holder.style.position='fixed'; holder.style.left='-9999px';
+  holder.innerHTML=rejectEmailHTML(c); document.body.appendChild(holder);
+  const range=document.createRange(); range.selectNodeContents(holder);
+  const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  try{document.execCommand('copy');}catch(e){}
+  sel.removeAllRanges(); holder.remove();
+  const old=btn.textContent; btn.textContent='Copied ✓'; setTimeout(()=>btn.textContent=old,1500);
+  toast(`Rejection note for ${firstName(c.name)} copied. Paste into Gmail and add your sign-off.`);
+}
+function toggleMail(el){el.nextElementSibling.classList.toggle('open');el.textContent=(el.nextElementSibling.classList.contains('open')?'▾':'▸')+' '+el.textContent.slice(2);}
+
+/* ---------- export / import / reset ---------- */
+function downloadCSV(){
+  const head=['Candidate','Role','Location','Employment','Status','Pre-screen','Initial','Final','Offer sent','Offer accepted','Flag','Days waiting','Rejection email sent','Recruiter notes','Mike comment','Dr Priti feedback','Reason'];
+  const rows=[head];
+  CAND.forEach(c=>{const e=evaluate(c);
+    rows.push([c.name,c.role,c.location,c.emp,c.status,c.pre,c.init,c.fin,c.oSent,c.oAcc,
+      e.flag?e.flag.type:(e.rejectEmail?'send-rejection':''), e.flag?e.flag.days:'',
+      e.outcome==='rejected'?(c.emailSent?'yes':'no'):'', c.recFeedback,c.mikeComment,c.pritiFeedback,c.reason]);
+  });
+  const csv=rows.map(r=>r.map(x=>{x=String(x==null?'':x);return /[",\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x;}).join(',')).join('\r\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='Provider_Pipeline_Tracker.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+function importXLSX(file){
+  if(!IS_EDITOR){toast('Log in to import candidates.');return;}
+  if(typeof XLSX==='undefined'){toast('Spreadsheet reader did not load. Reconnect once and retry.');return;}
+  if(!confirm('Replace ALL candidates with the rows in this file? Your current edits in the tracker will be overwritten.'))return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(reader.result),{type:'array',cellDates:true});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+      // find header row
+      let hr=0;
+      for(let r=0;r<Math.min(aoa.length,10);r++){
+        const cells=aoa[r].map(x=>String(x).toLowerCase());
+        if(cells.some(x=>x.includes('status'))&&cells.some(x=>x.includes('position')||x.includes('interview')||x.includes('pre-screen')||x.includes('candidate'))){hr=r;break;}
+      }
+      const H=aoa[hr].map(x=>String(x).toLowerCase());
+      const col=(...keys)=>{for(const k of keys){const i=H.findIndex(h=>h.includes(k));if(i>-1)return i;}return -1;};
+      const cN=Math.max(0,col('ƒ','candidate','name')),cP=col('position','role'),cS=col('status'),
+        cPre=col('prescreen','pre-screen','pre screen','screening interview'),cI=col('initial interview','initial'),cF=col('final interview','final'),
+        cOS=col('offer sent'),cOA=col('offer accept','offer accepted','acceptance'),cL=col('location'),cE=col('employ'),
+        cRF=col("recruiter"),cM=col("mike"),cPr=col('priti'),cR=col('reason');
+      const by=new Date().getFullYear();
+      const out=[];
+      aoa.slice(hr+1).forEach(r=>{
+        const nm=String(r[cN]||'').trim(); if(!nm)return;
+        out.push({id:uid(),name:nm,role:String(cP>=0?r[cP]:'').trim()||'Unspecified',
+          location:String(cL>=0?r[cL]:'').trim(),emp:String(cE>=0?r[cE]:'').trim(),status:String(cS>=0?r[cS]:'').trim(),
+          pre:parseStageISO(cPre>=0?r[cPre]:'',by),init:parseStageISO(cI>=0?r[cI]:'',by),fin:parseStageISO(cF>=0?r[cF]:'',by),
+          oSent:parseStageISO(cOS>=0?r[cOS]:'',by),oAcc:parseStageISO(cOA>=0?r[cOA]:'',by),
+          recFeedback:String(cRF>=0?r[cRF]:'').trim(),mikeComment:String(cM>=0?r[cM]:'').trim(),
+          pritiFeedback:String(cPr>=0?r[cPr]:'').trim(),reason:String(cR>=0?r[cR]:'').trim(),emailSent:false});
+      });
+      if(!out.length){toast('No candidate rows found in that file.');return;}
+      replaceCandidates(out).then(ok=>{if(ok){CAND=out; activeFilter='action'; fillStaticLists(); render(); toast(`Imported ${out.length} candidates from the file.`);}});
+    }catch(err){toast('Could not read that file. '+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+async function reloadOriginal(){
+  if(!IS_EDITOR){toast('Log in to reload candidates.');return;}
+  if(!confirm('Reload the original 67 candidates from the embedded file? Anything you added or edited will be lost.'))return;
+  const out=buildFromSeed();
+  if(await replaceCandidates(out)){ CAND=out; activeFilter='action'; fillStaticLists(); render(); toast('Reloaded the original candidate set into Supabase.'); }
+}
+
+/* ---------- toast ---------- */
+let toastT=null;
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),3000);}
+
+/* ============================================================
+   INIT + WIRING
+   ============================================================ */
+function fillStaticLists(){
+  document.getElementById('f_status').innerHTML=STATUS_OPTIONS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  const roles=[...new Set(CAND.map(c=>c.role).filter(Boolean))].sort();
+  document.getElementById('roleList').innerHTML=roles.map(r=>`<option value="${esc(r)}">`).join('');
+}
+async function init(){
+  try{await load();}catch(err){document.getElementById('parseNotice').innerHTML=`<div class="notice err"><strong>Could not load Supabase data.</strong> ${esc(err.message||err)}</div>`;}
+  fillStaticLists();
+  renderSettings();
+  render();
+
+  const addBtn=document.getElementById('addBtn'); if(addBtn)addBtn.addEventListener('click',openAdd);
+  document.getElementById('search').addEventListener('input',render);
+  document.getElementById('sortSel').addEventListener('change',e=>{sortMode=e.target.value;render();});
+  document.getElementById('refDate').addEventListener('change',e=>{
+    if(!IS_EDITOR){e.target.value=toISO(refDateObj());toast('Log in to change the shared as-of date.');return;}
+    const v=e.target.value; const todayISO=toISO(new Date());
+    SET.refDate=(v===todayISO)?'':v; saveS().then(ok=>{if(ok)render();});
+  });
+  const settingsBtn=document.getElementById('settingsBtn'); if(settingsBtn)settingsBtn.addEventListener('click',()=>document.getElementById('settingsPanel').classList.toggle('open'));
+  document.getElementById('dlBtn').addEventListener('click',downloadCSV);
+  const resetBtn=document.getElementById('resetBtn'); if(resetBtn)resetBtn.addEventListener('click',reloadOriginal);
+  const importBtn=document.getElementById('importBtn'); if(importBtn)importBtn.addEventListener('click',()=>document.getElementById('fileImport').click());
+  document.getElementById('loginBtn').addEventListener('click',handleAuthClick);
+  document.getElementById('fileImport').addEventListener('change',e=>{if(e.target.files[0])importXLSX(e.target.files[0]);e.target.value='';});
+
+  document.getElementById('modalClose').addEventListener('click',hideModal);
+  document.getElementById('modalCancel').addEventListener('click',hideModal);
+  document.getElementById('modalSave').addEventListener('click',saveModal);
+  document.getElementById('modalDelete').addEventListener('click',deleteCand);
+  document.getElementById('overlay').addEventListener('click',e=>{if(e.target.id==='overlay')hideModal();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')hideModal();});
+  if(sb){
+    sb.auth.onAuthStateChange(async()=>{await load(); fillStaticLists(); renderSettings(); render(); subscribeRealtime();});
+    subscribeRealtime();
+  }
+}
+async function handleAuthClick(){
+  if(!sb){toast('Supabase is not configured yet.');return;}
+  if(IS_EDITOR){await sb.auth.signOut(); toast('Logged out. Public view-only mode is active.'); return;}
+  const email=prompt('Editor email'); if(!email)return;
+  const password=prompt('Editor password'); if(!password)return;
+  const {error}=await sb.auth.signInWithPassword({email,password});
+  if(error)toast('Login failed: '+error.message); else toast('Logged in as editor.');
+}
+init();
+</script>
+</body>
+</html>
