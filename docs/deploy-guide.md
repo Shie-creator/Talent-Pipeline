@@ -26,21 +26,23 @@ Do not put this password in Cloudflare. Do not use the Supabase service-role key
 
 These two values are safe in the browser because RLS only allows public reads.
 
-## 4. Deploy to Cloudflare Pages
+## 4. Deploy to Cloudflare
 
 1. Push this folder to a private GitHub repository.
-2. In Cloudflare, open **Workers & Pages** > **Create application** > **Pages**.
+2. In Cloudflare, open **Workers & Pages** > **Create application** and connect the GitHub repository.
 3. Connect the GitHub repository.
 4. Use these build settings:
    - Framework preset: **None**
    - Build command: `npm run build`
-   - Build output directory: `dist`
+   - Deploy command: `npx wrangler deploy`
+   - Non-production branch deploy command: `npx wrangler versions upload`
+   - Path / root directory: `/`
 5. Add environment variables:
    - `SUPABASE_URL`: your Supabase Project URL
    - `SUPABASE_ANON_KEY`: your Supabase anon public key
 6. Click **Save and Deploy**.
 
-Cloudflare gives you one public URL. Your team opens that URL with no account and gets view-only access.
+The `wrangler.toml` file tells Cloudflare to deploy the generated `dist` folder as static assets. Cloudflare gives you one public URL. Your team opens that URL with no account and gets view-only access.
 
 ## 5. Seed your candidates
 
