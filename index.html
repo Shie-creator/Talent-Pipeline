@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Adamina&family=Commissioner:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>window.PIPELINE_CONFIG={supabaseUrl:"%SUPABASE_URL%",supabaseAnonKey:"%SUPABASE_ANON_KEY%"};</script>
+<script>window.PIPELINE_CONFIG={supabaseUrl:"https://oogcufbgkevtglrcwmdj.supabase.co",supabaseAnonKey:"sb_publishable_bXAnhifqi62uJe_43-H6KA_GI7Pg9ar"};</script>
 <style>
   :root{
     --navy:#1e3565; --teal:#2f9e8f; --teal-deep:#1f7e72; --teal-soft:#d7efe9;
@@ -353,7 +353,7 @@ const SEED = [{"name": "Jhanna Francisco", "position": "Psych Nurse Practitioner
 
 const SUPABASE_URL=window.PIPELINE_CONFIG?.supabaseUrl||'';
 const SUPABASE_ANON_KEY=window.PIPELINE_CONFIG?.supabaseAnonKey||'';
-const DB_CONFIGURED=SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes('%SUPABASE_URL%') && !SUPABASE_ANON_KEY.includes('%SUPABASE_ANON_KEY%');
+const DB_CONFIGURED=Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 const sb=DB_CONFIGURED && window.supabase ? window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY) : null;
 const DEFAULT_SETTINGS={
   thPre:4, thInit:3, thFinal:2, thOffer:5,
@@ -435,7 +435,7 @@ function applyReadonlyState(){
 async function load(){
   if(!sb){
     CAND=[]; SET={...DEFAULT_SETTINGS}; applyReadonlyState();
-    document.getElementById('parseNotice').innerHTML='<div class="notice err"><strong>Supabase is not configured.</strong> Add SUPABASE_URL and SUPABASE_ANON_KEY in Cloudflare Pages, then redeploy.</div>';
+    document.getElementById('parseNotice').innerHTML='<div class="notice err"><strong>Supabase is not configured.</strong> Check the embedded Supabase URL and publishable key in the app config, then redeploy.</div>';
     return;
   }
   const {data:{session}}=await sb.auth.getSession();
