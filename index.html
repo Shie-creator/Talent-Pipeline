@@ -514,6 +514,12 @@ function stageBadge(c){
   if(/screen/.test(s))return {cls:'b-screen',txt:'Screening'};
   return {cls:'b-screen',txt:c.status||'Active'};
 }
+function isOfferWaiting(c){
+  const s=(c.status||'').toLowerCase();
+  const offerSent=!!c.oSent || /offer sent/.test(s);
+  const accepted=!!c.oAcc || /offer accepted|hired/.test(s);
+  return offerSent && !accepted;
+}
 /* returns the active flag for a candidate (or null), plus upcoming info */
 function evaluate(c){
   const D=refDateObj();
@@ -532,7 +538,7 @@ function evaluate(c){
   if(o!=='active'){ return result; }
 
   // OFFER outstanding: offer sent (date or status) and not accepted
-  const offerSentSig = past(c.oSent) || /offer sent/.test((c.status||'').toLowerCase());
+  const offerSentSig = past(c.oSent) || isOfferWaiting(c);
   if(SET.enOffer && offerSentSig && !c.oAcc){
     const baseISO = past(c.oSent)? c.oSent : (past(c.fin)? c.fin : '');
     const dd = baseISO? daysBetween(baseISO,D) : null;
@@ -616,12 +622,12 @@ function renderSummary(ev,flagged,rejectQueue){
   const active=ev.filter(x=>x.e.outcome==='active').length;
   const parked=ev.filter(x=>x.e.outcome==='parked').length;
   const hired=ev.filter(x=>x.e.outcome==='hired').length;
-  const offersOut=ev.filter(x=>x.e.flag&&x.e.flag.type==='offer').length;
+  const offersOut=ev.filter(({c})=>isOfferWaiting(c)).length;
   const finalWait=ev.filter(x=>x.e.flag&&x.e.flag.type==='final').length;
   document.getElementById('summary').innerHTML=`
     <div class="stat action"><div class="n">${flagged.length}</div><div class="l">Need a next step</div></div>
     <div class="stat blue"><div class="n">${active}</div><div class="l">Active in pipeline</div></div>
-    <div class="stat flag"><div class="n">${offersOut}</div><div class="l">Offers awaiting reply</div></div>
+    <div class="stat flag"><div class="n">${offersOut}</div><div class="l">Offer sent, waiting for response</div></div>
     <div class="stat"><div class="n">${finalWait}</div><div class="l">Final stage, no decision</div></div>
     <div class="stat zero"><div class="n">${rejectQueue.length}</div><div class="l">Rejection emails to send</div></div>
     <div class="stat good"><div class="n">${hired}</div><div class="l">Offers accepted</div></div>`;
